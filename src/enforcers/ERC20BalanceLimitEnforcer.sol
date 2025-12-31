@@ -9,9 +9,9 @@ import { ModeCode } from "../utils/Types.sol";
 /**
  * @title ERC20BalanceLimitEnforcer
  * @dev This contract allows setting up some guardrails around balance limits. By specifying an account 
- * limit (upper/lower), one can enforce that token transfers not occur if the ERC20 balance exceeds or 
- * drops below a certain threshold. The change can be either a lower limit or upper limit based on
- * the `enforceLowerLimit` flag.
+ * limit (upper/lower), one can enforce that token transfers not occur if the ERC20 balance is above or 
+ * below a certain threshold or if the transfer would cause the balance to violate one of these limits. 
+ * The limit can be either a lower limit or upper limit based on the `enforceLowerLimit` flag.
  * @dev This contract has no enforcement of how the balance changes. It's meant to be used alongside additional enforcers to
  * create granular permissions.
  * @dev This enforcer operates only in default execution mode.
@@ -32,7 +32,7 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
      * - next 20 bytes: address of the token
      * - next 20 bytes: address of the recipient
      * - next 32 bytes: balance limit guardrail amount (i.e., lower OR upper balance bound, depending on
-     * enforceDecrease)
+     * enforceLowerLimit)
      * @param _mode The execution mode. (Must be Default execType)
      */
     function beforeHook(
@@ -48,7 +48,7 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
         override
         onlyDefaultExecutionMode(_mode)
     {
-        (bool enforceLowerLimit, address token_, address recipient_, uint256 amount_) = getTermsInfo(_terms);
+        (bool enforceLowerLimit, address token_, address, uint256 amount_) = getTermsInfo(_terms);
         uint256 balance_ = IERC20(token_).balanceOf(_delegator);
         if (enforceLowerLimit) {
             require(balance_ > amount_, "ERC20BalanceLimitEnforcer:violated-lower-balance-limit");
@@ -78,7 +78,7 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
         public
         override
     {
-        (bool enforceLowerLimit, address token_, address recipient_, uint256 amount_) = getTermsInfo(_terms);
+        (bool enforceLowerLimit, address token_, address, uint256 amount_) = getTermsInfo(_terms);
         uint256 balance_ = IERC20(token_).balanceOf(_delegator);
         if (enforceLowerLimit) {
             require(balance_ > amount_, "ERC20BalanceLimitEnforcer:violated-lower-balance-limit");
