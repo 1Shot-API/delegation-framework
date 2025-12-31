@@ -9,8 +9,8 @@ import { ModeCode } from "../utils/Types.sol";
 /**
  * @title ERC20BalanceLimitEnforcer
  * @dev This contract allows setting up some guardrails around balance limits. By specifying an account 
- * limit (upper/lower), one can enforce that token transfers not occur if the ERC20 balance, after execution, 
- * is above or below a certain threshold. The limit can be either a lower limit or upper limit based 
+ * limit (upper/lower). One can enforce that execution is prevented if the ERC20 balance is too high before execution,
+ * or execution reverts if the ERC20 balance is too low after all executions. Upper/lower limit is selected based 
  * on the `enforceLowerLimit` flag.
  * @dev This contract has no enforcement of how the balance changes. It's meant to be used alongside additional enforcers to
  * create granular permissions.
