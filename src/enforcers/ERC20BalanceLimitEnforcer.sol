@@ -9,9 +9,9 @@ import { ModeCode } from "../utils/Types.sol";
 /**
  * @title ERC20BalanceLimitEnforcer
  * @dev This contract allows setting up some guardrails around balance limits. By specifying an account 
- * limit (upper/lower), one can enforce that token transfers not occur if the ERC20 balance is above or 
- * below a certain threshold or if the transfer would cause the balance to violate one of these limits. 
- * The limit can be either a lower limit or upper limit based on the `enforceLowerLimit` flag.
+ * limit (upper/lower), one can enforce that token transfers not occur if the ERC20 balance, after execution, 
+ * is above or below a certain threshold. The limit can be either a lower limit or upper limit based 
+ * on the `enforceLowerLimit` flag.
  * @dev This contract has no enforcement of how the balance changes. It's meant to be used alongside additional enforcers to
  * create granular permissions.
  * @dev This enforcer operates only in default execution mode.
@@ -26,39 +26,7 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
     ////////////////////////////// Public Methods //////////////////////////////
 
     /**
-     * @notice This function caches the delegators ERC20 balance before the delegation is executed.
-     * @param _terms 73 packed bytes where:
-     * - first byte: boolean indicating if the balance should stay above (true | 0x01) or below (false | 0x00) a limit
-     * - next 20 bytes: address of the token
-     * - next 20 bytes: address of the recipient
-     * - next 32 bytes: balance limit guardrail amount (i.e., lower OR upper balance bound, depending on
-     * enforceLowerLimit)
-     * @param _mode The execution mode. (Must be Default execType)
-     */
-    function beforeHook(
-        bytes calldata _terms,
-        bytes calldata,
-        ModeCode _mode,
-        bytes calldata,
-        bytes32,
-        address _delegator,
-        address
-    )
-        public
-        override
-        onlyDefaultExecutionMode(_mode)
-    {
-        (bool enforceLowerLimit, address token_, address, uint256 amount_) = getTermsInfo(_terms);
-        uint256 balance_ = IERC20(token_).balanceOf(_delegator);
-        if (enforceLowerLimit) {
-            require(balance_ > amount_, "ERC20BalanceLimitEnforcer:violated-lower-balance-limit");
-        } else {
-            require(balance_ < amount_, "ERC20BalanceLimitEnforcer:exceeded-upper-balance-limit");
-        }
-    }
-
-    /**
-     * @notice This function enforces that the delegators ERC20 balance has changed by the expected amount.
+     * @notice This function enforces that the delegators ERC20 balance respects limits after all executions.
      * @param _terms 73 packed bytes where:
      * - first byte: boolean indicating if the balance should be higher than (true | 0x01) or lower than (false | 0x00)
      * - next 20 bytes: address of the token
@@ -66,7 +34,7 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
      * - next 32 bytes: balance limit guardrail amount (i.e., upper OR lower bound, depending on
      * enforceLowerLimit)
      */
-    function afterHook(
+    function afterAllHook(
         bytes calldata _terms,
         bytes calldata,
         ModeCode,
