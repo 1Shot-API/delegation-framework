@@ -41,9 +41,9 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
         public
         override
     {
-        (bool enforceLowerLimit, address token_, address, uint256 amount_) = getTermsInfo(_terms);
+        (bool enforceLowerLimit_, address token_, address, uint256 amount_) = getTermsInfo(_terms);
         uint256 balance_ = IERC20(token_).balanceOf(_delegator);
-        if (!enforceLowerLimit) {
+        if (!enforceLowerLimit_) {
             require(balance_ < amount_, "ERC20BalanceLimitEnforcer:exceeds-upper-balance-limit");
         }
     }
@@ -69,9 +69,9 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
         public
         override
     {
-        (bool enforceLowerLimit, address token_, address, uint256 amount_) = getTermsInfo(_terms);
+        (bool enforceLowerLimit_, address token_, address, uint256 amount_) = getTermsInfo(_terms);
         uint256 balance_ = IERC20(token_).balanceOf(_delegator);
-        if (enforceLowerLimit) {
+        if (enforceLowerLimit_) {
             require(balance_ > amount_, "ERC20BalanceLimitEnforcer:violated-lower-balance-limit");
         }
     }
