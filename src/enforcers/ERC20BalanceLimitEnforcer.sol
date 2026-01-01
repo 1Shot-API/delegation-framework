@@ -15,11 +15,6 @@ import { ModeCode } from "../utils/Types.sol";
  * @dev This contract has no enforcement of how the balance changes. It's meant to be used alongside additional enforcers to
  * create granular permissions.
  * @dev This enforcer operates only in default execution mode.
- * @dev Security Notice: This enforcer tracks balance limits by checking the sender's balance before and after execution. Since
- * enforcers watching the same recipient share state, a single balance modification may satisfy multiple enforcers simultaneously.
- * Users should avoid tracking the same recipient's balance on multiple enforcers in a single delegation chain to prevent unintended
- * behavior. Given its potential for concurrent condition fulfillment, use this enforcer at your own risk and ensure it aligns with
- * your intended security model.
  */
 contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
 
