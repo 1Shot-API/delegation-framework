@@ -30,7 +30,7 @@ contract ERC20BalanceLimitEnforcerTest is CaveatEnforcerBaseTest {
         recipient = address(users.carol.deleGator);
         dm = address(delegationManager);
         enforcer = new ERC20BalanceLimitEnforcer();
-        vm.label(address(enforcer), "ERC20 Balance Change Enforcer");
+        vm.label(address(enforcer), "ERC20 Balance Limit Enforcer");
         token = new BasicERC20(delegator, "TEST", "TEST", 0);
         vm.label(address(token), "ERC20 Test Token");
         mintExecution =
