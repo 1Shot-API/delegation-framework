@@ -34,8 +34,8 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
         bytes calldata,
         ModeCode,
         bytes calldata,
-        bytes32 _delegationHash,
-        address,
+        bytes32,
+        address _delegator,
         address
     )
         public
@@ -62,8 +62,8 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
         bytes calldata,
         ModeCode,
         bytes calldata,
-        bytes32 _delegationHash,
-        address,
+        bytes32,
+        address _delegator,
         address
     )
         public
