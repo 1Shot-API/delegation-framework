@@ -40,6 +40,7 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
     )
         public
         override
+        onlyDefaultExecutionMode(_mode)
     {
         (bool enforceLowerLimit_, address token_, address, uint256 amount_) = getTermsInfo(_terms);
         uint256 balance_ = IERC20(token_).balanceOf(_delegator);
@@ -68,6 +69,7 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
     )
         public
         override
+        onlyDefaultExecutionMode(_mode)
     {
         (bool enforceLowerLimit_, address token_, address, uint256 amount_) = getTermsInfo(_terms);
         uint256 balance_ = IERC20(token_).balanceOf(_delegator);
