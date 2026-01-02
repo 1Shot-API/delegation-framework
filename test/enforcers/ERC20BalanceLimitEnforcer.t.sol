@@ -18,8 +18,8 @@ contract ERC20BalanceLimitEnforcerTest is CaveatEnforcerBaseTest {
     address delegate;
     address recipient;
     address dm;
-    Execution mintExecution;
-    bytes mintExecutionCallData;
+    Execution transferExecution;
+    bytes transferExecutionCallData;
 
     ////////////////////////////// Set up //////////////////////////////
 
@@ -33,173 +33,124 @@ contract ERC20BalanceLimitEnforcerTest is CaveatEnforcerBaseTest {
         vm.label(address(enforcer), "ERC20 Balance Limit Enforcer");
         token = new BasicERC20(delegator, "TEST", "TEST", 0);
         vm.label(address(token), "ERC20 Test Token");
-        mintExecution =
-            Execution({ target: address(token), value: 0, callData: abi.encodeWithSelector(token.mint.selector, delegator, 100) });
-        mintExecutionCallData = abi.encode(mintExecution);
+        transferExecution =
+            Execution({ target: address(token), value: 0, callData: abi.encodeWithSelector(token.transfer.selector, recipient, 50) });
+        transferExecutionCallData = abi.encode(transferExecution);
     }
 
     ////////////////////////////// Basic Functionality //////////////////////////////
 
-    // Validates the terms get decoded correctly for an increase scenario
+    // Validates the terms get decoded correctly
     function test_decodedTheTerms() public {
         bytes memory terms_ = abi.encodePacked(false, address(token), address(recipient), uint256(100));
-        (bool enforceDecrease_, address token_, address recipient_, uint256 amount_) = enforcer.getTermsInfo(terms_);
-        assertEq(enforceDecrease_, false);
+        (bool enforceLowerLimit_, address token_, address recipient_, uint256 amount_) = enforcer.getTermsInfo(terms_);
+        assertEq(enforceLowerLimit_, false);
         assertEq(token_, address(token));
         assertEq(recipient_, address(recipient));
         assertEq(amount_, 100);
     }
 
-    // Validates that a balance has increased at least the expected amount
-    function test_allow_ifBalanceIncreases() public {
-        // Terms: [flag=false, token, recipient, amount=100]
+    ////////////////////////////// Lower Limit Tests //////////////////////////////
+
+    // Test 1: ERC20 token transfers are allowed if a lower limit is set and the delegators balance is above a lower threshold
+    function test_allow_lowerLimit_balanceStaysAboveThreshold() public {
+        // Set initial balance for delegator
+        uint256 initialBalance_ = 200;
+        vm.prank(delegator);
+        token.mint(delegator, initialBalance_);
+
+        // Terms: flag=true (lower limit enforcement), token, recipient, lower limit = 100
+        // This means after execution, delegator's balance must be > 100
+        bytes memory terms_ = abi.encodePacked(true, address(token), address(recipient), uint256(100));
+
+        // Transfer 50 tokens (delegator balance: 200 -> 150, which is > 100)
+        vm.prank(dm);
+        enforcer.beforeAllHook(terms_, hex"", singleDefaultMode, transferExecutionCallData, bytes32(0), delegator, delegate);
+        vm.prank(delegator);
+        token.transfer(recipient, 50);
+        vm.prank(dm);
+        enforcer.afterAllHook(terms_, hex"", singleDefaultMode, transferExecutionCallData, bytes32(0), delegator, delegate);
+
+        // Verify final balance is above threshold
+        assertEq(token.balanceOf(delegator), 150);
+        assertTrue(token.balanceOf(delegator) > 100);
+    }
+
+    // Test 2: ERC20 token transfers are reverted if the delegators ERC20 token balance drops below the lower limit after a transfer
+    function test_notAllow_lowerLimit_balanceDropsBelowThreshold() public {
+        // Set initial balance for delegator
+        uint256 initialBalance_ = 120;
+        vm.prank(delegator);
+        token.mint(delegator, initialBalance_);
+
+        // Terms: flag=true (lower limit enforcement), token, recipient, lower limit = 100
+        // This means after execution, delegator's balance must be > 100
+        bytes memory terms_ = abi.encodePacked(true, address(token), address(recipient), uint256(100));
+
+        // Transfer 50 tokens (delegator balance: 120 -> 70, which is <= 100)
+        vm.prank(dm);
+        enforcer.beforeAllHook(terms_, hex"", singleDefaultMode, transferExecutionCallData, bytes32(0), delegator, delegate);
+        vm.prank(delegator);
+        token.transfer(recipient, 50);
+        vm.prank(dm);
+        vm.expectRevert(bytes("ERC20BalanceLimitEnforcer:violated-lower-balance-limit"));
+        enforcer.afterAllHook(terms_, hex"", singleDefaultMode, transferExecutionCallData, bytes32(0), delegator, delegate);
+    }
+
+    ////////////////////////////// Upper Limit Tests //////////////////////////////
+
+    // Test 3: ERC20 token transfers are reverted if the delegators ERC20 token balance is above the set threshold
+    function test_notAllow_upperLimit_balanceAboveThreshold() public {
+        // Set initial balance for delegator above the threshold
+        uint256 initialBalance_ = 150;
+        vm.prank(delegator);
+        token.mint(delegator, initialBalance_);
+
+        // Terms: flag=false (upper limit enforcement), token, recipient, upper limit = 100
+        // This means before execution, delegator's balance must be < 100
         bytes memory terms_ = abi.encodePacked(false, address(token), address(recipient), uint256(100));
 
-        // Increase by 100
+        // beforeAllHook should revert because balance (150) is not < 100
         vm.prank(dm);
-        enforcer.beforeHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
-        vm.prank(delegator);
-        token.mint(recipient, 100);
-        vm.prank(dm);
-        enforcer.afterHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
-
-        // Increase by 1000
-        vm.prank(dm);
-        enforcer.beforeHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
-        vm.prank(delegator);
-        token.mint(recipient, 1000);
-        vm.prank(dm);
-        enforcer.afterHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
+        vm.expectRevert(bytes("ERC20BalanceLimitEnforcer:exceeds-upper-balance-limit"));
+        enforcer.beforeAllHook(terms_, hex"", singleDefaultMode, transferExecutionCallData, bytes32(0), delegator, delegate);
     }
 
-    // Validates that a delegation can be reused with different recipients (for increase) without interference
-    function test_allow_reuseDelegationWithDifferentRecipients() public {
-        // Terms for two different recipients (flag=false indicates increase expected)
-        bytes memory terms1_ = abi.encodePacked(false, address(token), address(recipient), uint256(100));
-        bytes memory terms2_ = abi.encodePacked(false, address(token), address(delegator), uint256(100));
-
-        // Increase for recipient
-        vm.prank(dm);
-        enforcer.beforeHook(terms1_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
+    // Test 4: ERC20 token transfers are allowed if the delegators ERC20 token balance starts below an upper threshold and ends above the upper threshold after a token transfer
+    function test_allow_upperLimit_balanceStartsBelowEndsAbove() public {
+        // Set initial balance for delegator below the threshold
+        uint256 initialBalance_ = 80;
         vm.prank(delegator);
-        token.mint(recipient, 100);
-        vm.prank(dm);
-        enforcer.afterHook(terms1_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
+        token.mint(delegator, initialBalance_);
 
-        // Increase for delegator as recipient
+        // Create execution that mints tokens to delegator (increasing balance above threshold)
+        // This simulates a scenario where the execution increases the delegator's balance
+        Execution memory mintExec_ = Execution({
+            target: address(token),
+            value: 0,
+            callData: abi.encodeWithSelector(token.mint.selector, delegator, 50)
+        });
+        bytes memory mintExecCallData_ = abi.encode(mintExec_);
+
+        // Terms: flag=false (upper limit enforcement), token, recipient, upper limit = 100
+        // This means before execution, delegator's balance must be < 100
+        bytes memory terms_ = abi.encodePacked(false, address(token), address(recipient), uint256(100));
+
+        // beforeAllHook should pass because balance (80) is < 100
+        // After minting 50 tokens, balance becomes 130 (which is > 100), but that's OK because upper limit only checks before execution
         vm.prank(dm);
-        enforcer.beforeHook(terms2_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
+        enforcer.beforeAllHook(terms_, hex"", singleDefaultMode, mintExecCallData_, bytes32(0), delegator, delegate);
         vm.prank(delegator);
-        token.mint(delegator, 100);
+        token.mint(delegator, 50);
         vm.prank(dm);
-        enforcer.afterHook(terms2_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
-    }
+        enforcer.afterAllHook(terms_, hex"", singleDefaultMode, mintExecCallData_, bytes32(0), delegator, delegate);
 
-    // Validates that a balance decrease within the allowed range passes.
-    // For decreases (flag = true), the enforcer now checks that the final balance is not below the cached balance minus the
-    // allowed amount.
-    // Example: if the cached balance is 100 and the allowed decrease is 10, the final balance must be at least 90.
-    function test_allow_ifBalanceDoesNotDecreaseTooMuch() public {
-        // Set an initial balance for the recipient.
-        uint256 initialBalance_ = 100;
-        vm.prank(delegator);
-        token.mint(recipient, initialBalance_);
-
-        // Terms: flag=true (decrease expected), token, recipient, allowed decrease amount = 10.
-        bytes memory terms_ = abi.encodePacked(true, address(token), address(recipient), uint256(10));
-
-        // Cache the initial balance via beforeHook.
-        vm.prank(dm);
-        enforcer.beforeHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
-
-        // Simulate a decrease by transferring out 5 tokens (final balance becomes 95, which is >= 100 - 10)
-        vm.prank(recipient);
-        token.transfer(delegator, 5);
-
-        // afterHook should pass since 95 >= 90.
-        vm.prank(dm);
-        enforcer.afterHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
-    }
-
-    // New Test: Reverts if the balance decreases too much (i.e. final balance falls below cached balance - allowed amount)
-    function test_notAllow_excessiveDecrease() public {
-        uint256 initialBalance_ = 100;
-        vm.prank(delegator);
-        token.mint(recipient, initialBalance_);
-
-        // Terms: flag=true (decrease expected), token, recipient, allowed maximum decrease = 10.
-        bytes memory terms_ = abi.encodePacked(true, address(token), address(recipient), uint256(10));
-
-        vm.prank(dm);
-        enforcer.beforeHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
-
-        // Simulate an excessive decrease: transfer out 20 tokens (final balance becomes 80, which is below 100 - 10).
-        vm.prank(recipient);
-        token.transfer(delegator, 20);
-
-        vm.prank(dm);
-        vm.expectRevert(bytes("ERC20BalanceLimitEnforcer:exceeded-balance-decrease"));
-        enforcer.afterHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
+        // Verify final balance is above threshold
+        assertEq(token.balanceOf(delegator), 130);
+        assertTrue(token.balanceOf(delegator) > 100);
     }
 
     ////////////////////////////// Errors //////////////////////////////
-
-    // Reverts if an increase hasn't been sufficient
-    function test_notAllow_insufficientIncrease() public {
-        // Terms: flag=false (increase expected), required increase of 100 tokens.
-        bytes memory terms_ = abi.encodePacked(false, address(token), address(recipient), uint256(100));
-
-        // Mint only 10 tokens (insufficient increase)
-        vm.prank(dm);
-        enforcer.beforeHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
-        vm.prank(delegator);
-        token.mint(recipient, 10);
-        vm.prank(dm);
-        vm.expectRevert(bytes("ERC20BalanceLimitEnforcer:insufficient-balance-increase"));
-        enforcer.afterHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
-    }
-
-    // Reverts if the enforcer is locked (i.e. reentrant beforeHook)
-    function test_notAllow_reenterALockedEnforcer() public {
-        bytes memory terms_ = abi.encodePacked(false, address(token), address(recipient), uint256(100));
-        bytes32 delegationHash_ = bytes32(uint256(99999999));
-
-        vm.startPrank(dm);
-        // First call locks the enforcer.
-        enforcer.beforeHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, delegationHash_, delegator, delegate);
-        bytes32 hashKey_ = enforcer.getHashKey(address(delegationManager), address(token), delegationHash_);
-        assertTrue(enforcer.isLocked(hashKey_));
-        vm.expectRevert(bytes("ERC20BalanceLimitEnforcer:enforcer-is-locked"));
-        enforcer.beforeHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, delegationHash_, delegator, delegate);
-        vm.stopPrank();
-
-        vm.startPrank(delegator);
-        token.mint(recipient, 1000);
-        vm.stopPrank();
-
-        vm.startPrank(dm);
-        // AfterHook unlocks the enforcer.
-        enforcer.afterHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, delegationHash_, delegator, delegate);
-        assertFalse(enforcer.isLocked(hashKey_));
-        // Can be used again, and the lock is reengaged.
-        enforcer.beforeHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, delegationHash_, delegator, delegate);
-        assertTrue(enforcer.isLocked(hashKey_));
-        vm.stopPrank();
-    }
-
-    // Reverts if no increase happens when one is expected
-    function test_notAllow_noIncreaseToRecipient() public {
-        bytes memory terms_ = abi.encodePacked(false, address(token), address(recipient), uint256(100));
-
-        // Cache the initial balance.
-        vm.prank(dm);
-        enforcer.beforeHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
-
-        // Do not modify recipient's balance.
-        vm.prank(dm);
-        vm.expectRevert(bytes("ERC20BalanceLimitEnforcer:insufficient-balance-increase"));
-        enforcer.afterHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
-    }
 
     // Validates that the terms are well formed (exactly 73 bytes)
     function test_invalid_decodedTheTerms() public {
@@ -216,28 +167,18 @@ contract ERC20BalanceLimitEnforcerTest is CaveatEnforcerBaseTest {
         enforcer.getTermsInfo(terms_);
     }
 
-    // Validates that an invalid token address (address(0)) reverts when calling beforeHook.
+    // Validates that an invalid token address (address(0)) reverts when calling beforeAllHook.
     function test_invalid_tokenAddress() public {
         bytes memory terms_ = abi.encodePacked(false, address(0), address(recipient), uint256(100));
         vm.expectRevert();
-        enforcer.beforeHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
-    }
-
-    // Reverts when the balance increase triggers an overflow.
-    function test_notAllow_expectingOverflow() public {
-        bytes memory terms_ = abi.encodePacked(false, address(token), address(recipient), type(uint256).max);
-
-        vm.prank(dm);
-        enforcer.beforeHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
-        vm.expectRevert();
-        enforcer.afterHook(terms_, hex"", singleDefaultMode, mintExecutionCallData, bytes32(0), delegator, delegate);
+        enforcer.beforeAllHook(terms_, hex"", singleDefaultMode, transferExecutionCallData, bytes32(0), delegator, delegate);
     }
 
     // Reverts if the execution mode is invalid (not default).
     function test_revertWithInvalidExecutionMode() public {
         vm.prank(address(delegationManager));
         vm.expectRevert("CaveatEnforcer:invalid-execution-type");
-        enforcer.beforeHook(hex"", hex"", singleTryMode, hex"", bytes32(0), address(0), address(0));
+        enforcer.beforeAllHook(hex"", hex"", singleTryMode, hex"", bytes32(0), address(0), address(0));
     }
 
     function _getEnforcer() internal view override returns (ICaveatEnforcer) {
