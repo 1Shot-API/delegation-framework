@@ -28,11 +28,12 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
      * - next 20 bytes: address of the recipient
      * - next 32 bytes: balance limit guardrail amount (i.e., upper OR lower bound, depending on
      * enforceLowerLimit)
+     * @param _mode The execution mode. (Must be Default execType)
      */
     function beforeAllHook(
         bytes calldata _terms,
         bytes calldata,
-        ModeCode,
+        ModeCode _mode,
         bytes calldata,
         bytes32,
         address _delegator,
@@ -42,7 +43,7 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
         override
         onlyDefaultExecutionMode(_mode)
     {
-        (bool enforceLowerLimit_, address token_, address, uint256 amount_) = getTermsInfo(_terms);
+        (bool enforceLowerLimit_, address token_, address recipient_, uint256 amount_) = getTermsInfo(_terms);
         uint256 balance_ = IERC20(token_).balanceOf(_delegator);
         if (!enforceLowerLimit_) {
             require(balance_ < amount_, "ERC20BalanceLimitEnforcer:exceeds-upper-balance-limit");
@@ -57,11 +58,12 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
      * - next 20 bytes: address of the recipient
      * - next 32 bytes: balance limit guardrail amount (i.e., upper OR lower bound, depending on
      * enforceLowerLimit)
+     * @param _mode The execution mode. (Must be Default execType)
      */
     function afterAllHook(
         bytes calldata _terms,
         bytes calldata,
-        ModeCode,
+        ModeCode _mode,
         bytes calldata,
         bytes32,
         address _delegator,
@@ -71,7 +73,7 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
         override
         onlyDefaultExecutionMode(_mode)
     {
-        (bool enforceLowerLimit_, address token_, address, uint256 amount_) = getTermsInfo(_terms);
+        (bool enforceLowerLimit_, address token_, address recipient_, uint256 amount_) = getTermsInfo(_terms);
         uint256 balance_ = IERC20(token_).balanceOf(_delegator);
         if (enforceLowerLimit_) {
             require(balance_ > amount_, "ERC20BalanceLimitEnforcer:violated-lower-balance-limit");
