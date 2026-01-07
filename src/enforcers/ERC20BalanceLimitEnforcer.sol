@@ -43,7 +43,7 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
         override
         onlyDefaultExecutionMode(_mode)
     {
-        (bool enforceLowerLimit_, address token_, address recipient_, uint256 amount_) = getTermsInfo(_terms);
+        (bool enforceLowerLimit_, address token_, uint256 amount_) = getTermsInfo(_terms);
         uint256 balance_ = IERC20(token_).balanceOf(_delegator);
         if (!enforceLowerLimit_) {
             require(balance_ < amount_, "ERC20BalanceLimitEnforcer:exceeds-upper-balance-limit");
@@ -73,7 +73,7 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
         override
         onlyDefaultExecutionMode(_mode)
     {
-        (bool enforceLowerLimit_, address token_, address recipient_, uint256 amount_) = getTermsInfo(_terms);
+        (bool enforceLowerLimit_, address token_, uint256 amount_) = getTermsInfo(_terms);
         uint256 balance_ = IERC20(token_).balanceOf(_delegator);
         if (enforceLowerLimit_) {
             require(balance_ > amount_, "ERC20BalanceLimitEnforcer:violated-lower-balance-limit");
@@ -85,19 +85,17 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
      * @param _terms encoded data that is used during the execution hooks.
      * @return enforceLowerLimit_ Boolean indicating if the balance should be higher than (true | 0x01) or lower than (false | 0x00) a limit.
      * @return token_ The address of the token.
-     * @return recipient_ The address of the recipient.
      * @return amount_ Balance limit guardrail amount (i.e., upper OR lower bound, depending on
      * enforceLowerLimit)
      */
     function getTermsInfo(bytes calldata _terms)
         public
         pure
-        returns (bool enforceLowerLimit_, address token_, address recipient_, uint256 amount_)
+        returns (bool enforceLowerLimit_, address token_, uint256 amount_)
     {
-        require(_terms.length == 73, "ERC20BalanceLimitEnforcer:invalid-terms-length");
+        require(_terms.length == 53, "ERC20BalanceLimitEnforcer:invalid-terms-length");
         enforceLowerLimit_ = _terms[0] != 0;
         token_ = address(bytes20(_terms[1:21]));
-        recipient_ = address(bytes20(_terms[21:41]));
-        amount_ = uint256(bytes32(_terms[41:]));
+        amount_ = uint256(bytes32(_terms[21:]));
     }
 }
