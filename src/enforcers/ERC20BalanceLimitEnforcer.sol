@@ -22,10 +22,9 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
 
     /**
      * @notice This function enforces that the delegators ERC20 balance respects upper limit before all executions.
-     * @param _terms 73 packed bytes where:
+     * @param _terms 53 packed bytes where:
      * - first byte: boolean indicating if the balance should be higher than (true | 0x01) or lower than (false | 0x00)
      * - next 20 bytes: address of the token
-     * - next 20 bytes: address of the recipient
      * - next 32 bytes: balance limit guardrail amount (i.e., upper OR lower bound, depending on
      * enforceLowerLimit)
      * @param _mode The execution mode. (Must be Default execType)
@@ -52,10 +51,9 @@ contract ERC20BalanceLimitEnforcer is CaveatEnforcer {
 
     /**
      * @notice This function enforces that the delegators ERC20 balance respects lower limit after all executions.
-     * @param _terms 73 packed bytes where:
+     * @param _terms 53 packed bytes where:
      * - first byte: boolean indicating if the balance should be higher than (true | 0x01) or lower than (false | 0x00)
      * - next 20 bytes: address of the token
-     * - next 20 bytes: address of the recipient
      * - next 32 bytes: balance limit guardrail amount (i.e., upper OR lower bound, depending on
      * enforceLowerLimit)
      * @param _mode The execution mode. (Must be Default execType)
