@@ -33,8 +33,11 @@ contract ERC20BalanceLimitEnforcerTest is CaveatEnforcerBaseTest {
         vm.label(address(enforcer), "ERC20 Balance Limit Enforcer");
         token = new BasicERC20(delegator, "TEST", "TEST", 0);
         vm.label(address(token), "ERC20 Test Token");
-        transferExecution =
-            Execution({ target: address(token), value: 0, callData: abi.encodeWithSelector(token.transfer.selector, recipient, 50) });
+        transferExecution = Execution({
+            target: address(token),
+            value: 0,
+            callData: abi.encodeWithSelector(token.transfer.selector, recipient, 50)
+        });
         transferExecutionCallData = abi.encode(transferExecution);
     }
 
@@ -42,11 +45,10 @@ contract ERC20BalanceLimitEnforcerTest is CaveatEnforcerBaseTest {
 
     // Validates the terms get decoded correctly
     function test_decodedTheTerms() public {
-        bytes memory terms_ = abi.encodePacked(false, address(token), address(recipient), uint256(100));
-        (bool enforceLowerLimit_, address token_, address recipient_, uint256 amount_) = enforcer.getTermsInfo(terms_);
+        bytes memory terms_ = abi.encodePacked(false, address(token), uint256(100));
+        (bool enforceLowerLimit_, address token_, uint256 amount_) = enforcer.getTermsInfo(terms_);
         assertEq(enforceLowerLimit_, false);
         assertEq(token_, address(token));
-        assertEq(recipient_, address(recipient));
         assertEq(amount_, 100);
     }
 
@@ -59,9 +61,9 @@ contract ERC20BalanceLimitEnforcerTest is CaveatEnforcerBaseTest {
         vm.prank(delegator);
         token.mint(delegator, initialBalance_);
 
-        // Terms: flag=true (lower limit enforcement), token, recipient, lower limit = 100
+        // Terms: flag=true (lower limit enforcement), token, lower limit = 100
         // This means after execution, delegator's balance must be > 100
-        bytes memory terms_ = abi.encodePacked(true, address(token), address(recipient), uint256(100));
+        bytes memory terms_ = abi.encodePacked(true, address(token), uint256(100));
 
         // Transfer 50 tokens (delegator balance: 200 -> 150, which is > 100)
         vm.prank(dm);
@@ -83,9 +85,9 @@ contract ERC20BalanceLimitEnforcerTest is CaveatEnforcerBaseTest {
         vm.prank(delegator);
         token.mint(delegator, initialBalance_);
 
-        // Terms: flag=true (lower limit enforcement), token, recipient, lower limit = 100
+        // Terms: flag=true (lower limit enforcement), token, lower limit = 100
         // This means after execution, delegator's balance must be > 100
-        bytes memory terms_ = abi.encodePacked(true, address(token), address(recipient), uint256(100));
+        bytes memory terms_ = abi.encodePacked(true, address(token), uint256(100));
 
         // Transfer 50 tokens (delegator balance: 120 -> 70, which is <= 100)
         vm.prank(dm);
@@ -106,9 +108,9 @@ contract ERC20BalanceLimitEnforcerTest is CaveatEnforcerBaseTest {
         vm.prank(delegator);
         token.mint(delegator, initialBalance_);
 
-        // Terms: flag=false (upper limit enforcement), token, recipient, upper limit = 100
+        // Terms: flag=false (upper limit enforcement), token, upper limit = 100
         // This means before execution, delegator's balance must be < 100
-        bytes memory terms_ = abi.encodePacked(false, address(token), address(recipient), uint256(100));
+        bytes memory terms_ = abi.encodePacked(false, address(token), uint256(100));
 
         // beforeAllHook should revert because balance (150) is not < 100
         vm.prank(dm);
@@ -116,7 +118,8 @@ contract ERC20BalanceLimitEnforcerTest is CaveatEnforcerBaseTest {
         enforcer.beforeAllHook(terms_, hex"", singleDefaultMode, transferExecutionCallData, bytes32(0), delegator, delegate);
     }
 
-    // Test 4: ERC20 token transfers are allowed if the delegators ERC20 token balance starts below an upper threshold and ends above the upper threshold after a token transfer
+    // Test 4: ERC20 token transfers are allowed if the delegators ERC20 token balance starts below
+    // an upper threshold and ends above the upper threshold after a token transfer
     function test_allow_upperLimit_balanceStartsBelowEndsAbove() public {
         // Set initial balance for delegator below the threshold
         uint256 initialBalance_ = 80;
@@ -132,12 +135,13 @@ contract ERC20BalanceLimitEnforcerTest is CaveatEnforcerBaseTest {
         });
         bytes memory mintExecCallData_ = abi.encode(mintExec_);
 
-        // Terms: flag=false (upper limit enforcement), token, recipient, upper limit = 100
+        // Terms: flag=false (upper limit enforcement), token, upper limit = 100
         // This means before execution, delegator's balance must be < 100
-        bytes memory terms_ = abi.encodePacked(false, address(token), address(recipient), uint256(100));
+        bytes memory terms_ = abi.encodePacked(false, address(token), uint256(100));
 
         // beforeAllHook should pass because balance (80) is < 100
-        // After minting 50 tokens, balance becomes 130 (which is > 100), but that's OK because upper limit only checks before execution
+        // After minting 50 tokens, balance becomes 130 (which is > 100), but that's OK because
+        // upper limit only checks before execution
         vm.prank(dm);
         enforcer.beforeAllHook(terms_, hex"", singleDefaultMode, mintExecCallData_, bytes32(0), delegator, delegate);
         vm.prank(delegator);
@@ -152,24 +156,24 @@ contract ERC20BalanceLimitEnforcerTest is CaveatEnforcerBaseTest {
 
     ////////////////////////////// Errors //////////////////////////////
 
-    // Validates that the terms are well formed (exactly 73 bytes)
+    // Validates that the terms are well formed (exactly 53 bytes)
     function test_invalid_decodedTheTerms() public {
         bytes memory terms_;
 
-        // Too small: missing required bytes (should be 73 bytes)
-        terms_ = abi.encodePacked(false, address(token), address(recipient), uint8(100));
+        // Too small: missing required bytes (should be 53 bytes)
+        terms_ = abi.encodePacked(false, address(token), uint8(100));
         vm.expectRevert(bytes("ERC20BalanceLimitEnforcer:invalid-terms-length"));
         enforcer.getTermsInfo(terms_);
 
-        // Too large: extra bytes beyond 73.
-        terms_ = abi.encodePacked(false, address(token), address(recipient), uint256(100), uint256(100));
+        // Too large: extra bytes beyond 53.
+        terms_ = abi.encodePacked(false, address(token), uint256(100), uint256(100));
         vm.expectRevert(bytes("ERC20BalanceLimitEnforcer:invalid-terms-length"));
         enforcer.getTermsInfo(terms_);
     }
 
     // Validates that an invalid token address (address(0)) reverts when calling beforeAllHook.
     function test_invalid_tokenAddress() public {
-        bytes memory terms_ = abi.encodePacked(false, address(0), address(recipient), uint256(100));
+        bytes memory terms_ = abi.encodePacked(false, address(0), uint256(100));
         vm.expectRevert();
         enforcer.beforeAllHook(terms_, hex"", singleDefaultMode, transferExecutionCallData, bytes32(0), delegator, delegate);
     }
