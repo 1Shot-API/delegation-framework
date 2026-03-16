@@ -47,6 +47,9 @@ bytes32 salt = bytes32(abi.encodePacked("GATOR"));
 - Sei
 - Sonic
 - Monad
+- MegaETH
+- Ronin
+- Celo
 
 ### Testnets
 
@@ -54,7 +57,7 @@ bytes32 salt = bytes32(abi.encodePacked("GATOR"));
 - Linea Sepolia
 - Polygon Amoy
 - Base Sepolia
-- MegaEth
+- MegaETH testnet
 - Gnosis Chiado
 - BNB Testnet
 - Optimism Sepolia
@@ -67,6 +70,8 @@ bytes32 salt = bytes32(abi.encodePacked("GATOR"));
 - Sei testnet
 - Sonic testnet
 - Hoodi
+- Ronin Saigon
+- Celo sepolia
 
 ## **Deployments**
 
