@@ -11,8 +11,8 @@ import { ModeCode } from "../utils/Types.sol";
  * @dev This contract allows setting up some guardrails around balance changes. By specifying an amount and a direction
  * (decrease/increase), one can enforce a maximum allowed decrease or minimum required increase in after-execution balance.
  * The change can be either a decrease or increase based on the `enforceDecrease` flag. 
- * The difference between this enforcer and the `ERC20BalanceChangeEnforcer` is that this enforcer avoids panics caused by underflow 
- * when _amount is greater than the cached balance.
+ * The difference between this enforcer and the `ERC20BalanceChangeEnforcer` is that this enforcer avoids panics caused by 
+ * underflow when `_amount` is greater than the initial cached balance.
  * @dev This contract has no enforcement of how the balance changes. It's meant to be used alongside additional enforcers to
  * create granular permissions.
  * @dev This enforcer operates only in default execution mode.
