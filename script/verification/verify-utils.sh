@@ -31,6 +31,7 @@ CHAIN_IDS=(
   1301       # unichain-sepolia
   10143      # monad-testnet
   5115       # citrea-testnet
+  4114       # citrea
   57073      # ink
   763373     # ink-sepolia
   1329       # sei
@@ -42,8 +43,19 @@ CHAIN_IDS=(
   6343       # megaeth-testnet
   2021       # ronin saigon testnet
   2020       # ronin
+  42431      # tempo testnet
+  4217       # tempo
   11142220   # celo sepolia
   42220      # celo
+  5003       # mantle sepolia
+  5000       # mantle
+  747474     # katana
+  737373     # katana-bokuto
+  13579      # intuition testnet
+  1155       # intuition
+  46630      # robinhood testnet
+  4663       # robinhood
+  5042002    # arc testnet
 )
 
 ##########################################
@@ -68,33 +80,45 @@ get_chain_config() {
         10)       config=("$ETHERSCAN_API_KEY" "etherscan" "$OPTIMISM_RPC_URL" "https://optimistic.etherscan.io/") ;; # optimism
         11155420) config=("$ETHERSCAN_API_KEY" "etherscan" "$OPTIMISM_SEPOLIA_RPC_URL" "https://sepolia-optimism.etherscan.io/") ;; # optimism-sepolia
         42161)    config=("$ETHERSCAN_API_KEY" "etherscan" "$ARBITRUM_RPC_URL" "https://arbiscan.io/")   ;; # arbitrum
-        42170)    config=("$ETHERSCAN_API_KEY" "etherscan" "$ARBITRUM_NOVA_RPC_URL" "")   ;; # arbitrum nova
+        42170)    config=("$ETHERSCAN_API_KEY" "etherscan" "$ARBITRUM_NOVA_RPC_URL" "https://api.etherscan.io/v2/api?chainid=42170")   ;; # arbitrum nova
         421614)   config=("$ETHERSCAN_API_KEY" "etherscan" "$ARBITRUM_SEPOLIA_RPC_URL" "https://sepolia.arbiscan.io/") ;; # arbitrum-sepolia
         137)      config=("$ETHERSCAN_API_KEY" "etherscan" "$POLYGON_RPC_URL" "https://polygonscan.com/") ;; # polygon
         80002)    config=("$ETHERSCAN_API_KEY" "etherscan" "$POLYGON_AMOY_RPC_URL" "https://amoy.polygonscan.com/") ;; # polygon-amoy
         100)      config=("$ETHERSCAN_API_KEY" "etherscan" "$GNOSIS_RPC_URL" "https://gnosisscan.io/") ;; # gnosis
-        10200)    config=("$GNOSISSCAN_API_KEY" "blockscout" "$GNOSIS_CHIADO_RPC_URL" "https://gnosis-chiado.blockscout.com/api") ;; # gnosis-chiado
+        10200)    config=("$ETHERSCAN_API_KEY" "blockscout" "$GNOSIS_CHIADO_RPC_URL" "https://gnosis-chiado.blockscout.com/api") ;; # gnosis-chiado
         56)       config=("$ETHERSCAN_API_KEY" "etherscan" "$BINANCE_RPC_URL" "https://bscscan.com/") ;; # binance
         97)       config=("$ETHERSCAN_API_KEY" "etherscan" "$BINANCE_TESTNET_RPC_URL" "https://testnet.bscscan.com/") ;; # binance-testnet
-        80094)    config=("$BERACHAIN_API_KEY" "custom" "$BERACHAIN_RPC_URL" "https://api.berascan.com/api") ;; # berachain
-        80069)    config=("$BERACHAIN_API_KEY" "custom" "$BERACHAIN_TESTNET_RPC_URL" "https://api-testnet.berascan.com/api") ;; # berachain-testnet
-        130)      config=("$UNICHAIN_API_KEY" "custom" "$UNICHAIN_RPC_URL" "https://api.uniscan.xyz/api") ;; # unichain
-        1301)     config=("$UNICHAIN_API_KEY" "custom" "$UNICHAIN_SEPOLIA_RPC_URL" "https://api-sepolia.uniscan.xyz/api") ;; # unichain-sepolia
+        80094)    config=("$ETHERSCAN_API_KEY" "etherscan" "$BERACHAIN_RPC_URL" "https://api.etherscan.io/v2/api?chainid=80094") ;; # berachain
+        80069)    config=("$ETHERSCAN_API_KEY" "etherscan" "$BERACHAIN_TESTNET_RPC_URL" "https://api.etherscan.io/v2/api?chainid=80069") ;; # berachain-testnet
+        130)      config=("$ETHERSCAN_API_KEY" "etherscan" "$UNICHAIN_RPC_URL" "https://api.etherscan.io/v2/api?chainid=130") ;; # unichain
+        1301)     config=("$ETHERSCAN_API_KEY" "etherscan" "$UNICHAIN_SEPOLIA_RPC_URL" "https://api.etherscan.io/v2/api?chainid=1301") ;; # unichain-sepolia
         10143)    config=("$ETHERSCAN_API_KEY" "etherscan" "$MONAD_TESTNET_RPC_URL" "") ;; # monad-testnet
         5115)     config=("key" "blockscout" "$CITREA_TESTNET_RPC_URL" "https://explorer.testnet.citrea.xyz/api") ;; # citrea-testnet
+        4114)     config=("key" "blockscout" "$CITREA_RPC_URL" "https://explorer.mainnet.citrea.xyz/api") ;; # citrea
         57073)    config=("key" "blockscout" "$INK_RPC_URL" "https://explorer.inkonchain.com/api") ;; # ink
         763373)   config=("key" "blockscout" "$INK_SEPOLIA_RPC_URL" "https://explorer-sepolia.inkonchain.com/api") ;; # ink-sepolia
-        1329)     config=("key" "custom" "$SEI_RPC_URL" "https://seitrace.com/pacific-1/api") ;; # sei
-        1328)     config=("key" "custom" "$SEI_TESTNET_RPC_URL" "https://seitrace.com/atlantic-2/api") ;; # sei-testnet
+        1329)     config=("$ETHERSCAN_API_KEY" "etherscan" "$SEI_RPC_URL" "https://api.etherscan.io/v2/api?chainid=1329") ;; # sei
+        1328)     config=("$ETHERSCAN_API_KEY" "etherscan" "$SEI_TESTNET_RPC_URL" "https://api.etherscan.io/v2/api?chainid=1328") ;; # sei-testnet
         146)      config=("$ETHERSCAN_API_KEY" "etherscan" "$SONIC_RPC_URL" "https://api.etherscan.io/v2/api?chainid=146") ;; # sonic
         14601)    config=("$ETHERSCAN_API_KEY" "etherscan" "$SONIC_TESTNET_RPC_URL" "https://api.etherscan.io/v2/api?chainid=14601") ;; # sonic-testnet
-        143)      config=("key" "sourcify" "$MONAD_RPC_URL" "https://sourcify-api-monad.blockvision.org/") ;; # monad
+        143)      config=("$ETHERSCAN_API_KEY" "etherscan" "$MONAD_RPC_URL" "https://api.etherscan.io/v2/api?chainid=143") ;; # monad
         4326)     config=("key" "blockscout" "$MEGA_ETH_RPC_URL" "https://megaeth.blockscout.com/api/") ;; # megaeth
         6343)     config=("key" "blockscout" "$MEGA_ETH_TESTNET_RPC_URL" "https://megaeth.blockscout.com/api/") ;; # megaeth-testnet
         2021)     config=("key" "sourcify" "$RONIN_SAIGON_RPC_URL" "https://sourcify.dev/server/") ;; # ronin saigon testnet
         2020)     config=("key" "sourcify" "$RONIN_RPC_URL" "https://sourcify.dev/server/v2/verify") ;; # ronin
+        42431)    config=("key" "etherscan" "$TEMPO_MODERATO_RPC_URL" "https://contracts.tempo.xyz") ;; # tempo moderato testnet
+        4217)     config=("key" "etherscan" "$TEMPO_RPC_URL" "https://contracts.tempo.xyz") ;; # tempo
         11142220) config=("$ETHERSCAN_API_KEY" "etherscan" "$CELO_SEPOLIA_RPC_URL" "https://api.etherscan.io/v2/api?chainid=11142220") ;; # celo sepolia
         42220)    config=("$ETHERSCAN_API_KEY" "etherscan" "$CELO_RPC_URL" "https://api.etherscan.io/v2/api?chainid=42220") ;; # celo
+        5003)     config=("$ETHERSCAN_API_KEY" "etherscan" "$MANTLE_SEPOLIA_RPC_URL" "https://api.etherscan.io/v2/api?chainid=5003") ;; # mantle sepolia
+        5000)     config=("$ETHERSCAN_API_KEY" "etherscan" "$MANTLE_RPC_URL" "https://api.etherscan.io/v2/api?chainid=5000") ;; # mantle
+        747474)   config=("$ETHERSCAN_API_KEY" "custom" "$KATANA_RPC_URL" "https://api.etherscan.io/v2/api?chainid=747474") ;; # katana
+        737373)   config=("$ETHERSCAN_API_KEY" "custom" "$KATANA_BOKUTO_RPC_URL" "https://api.etherscan.io/v2/api?chainid=737373") ;; # katana-bokuto
+        13579)    config=("key" "blockscout" "$INTUITION_TESTNET_RPC_URL" "https://intuition-testnet.explorer.caldera.xyz/api/") ;; # intuition testnet
+        1155)     config=("key" "blockscout" "$INTUITION_RPC_URL" "https://intuition.calderaexplorer.xyz/api/") ;; # intuition
+        46630) config=("key" "blockscout" "$ROBINHOOD_TESTNET_RPC_URL" "https://explorer.testnet.chain.robinhood.com/api/") ;; # robinhood testnet
+        4663) config=("key" "blockscout" "$ROBINHOOD_RPC_URL" "https://robinhoodchain.blockscout.com/api/") ;; # robinhood
+        5042002) config=("key" "blockscout" "$ARC_TESTNET_RPC_URL" "https://testnet.arcscan.app/api/") ;; # arc testnet
         *)
             echo "Unknown chain ID: $chain_id" >&2
             return 1

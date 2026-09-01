@@ -13,6 +13,8 @@ Below is an example of how to use the deployment scripts:
 forge script script/DeployCaveatEnforcers.s.sol --rpc-url <your_rpc_url> --private-key $PRIVATE_KEY --broadcast
 ```
 
+**MegaETH:** append `--gas-limit 300000000 --with-gas-price 2100000 --priority-gas-price 100000 --skip-simulation` to the `forge script` command (mainnet and testnet).
+
 ### Salt Value
 
 The deployment scripts use a predefined salt value, which is **"GATOR"**. This value is converted into a **`bytes32`** format.
@@ -37,7 +39,8 @@ bytes32 salt = bytes32(abi.encodePacked("GATOR"));
 - Binance Smart Chain
 - Optimism
 - Abitrum One
-- Abitrum Nova
+- Arbitrum One
+- Arbitrum Nova
 - Linea
 - Base
 - Gnosis Chain
@@ -49,7 +52,13 @@ bytes32 salt = bytes32(abi.encodePacked("GATOR"));
 - Monad
 - MegaETH
 - Ronin
+- Tempo
 - Celo
+- Citrea
+- Mantle
+- Katana
+- Intuition
+- Robinhood Chain
 
 ### Testnets
 
@@ -65,13 +74,19 @@ bytes32 salt = bytes32(abi.encodePacked("GATOR"));
 - Berachain testnet
 - Unichain Sepolia
 - Monad testnet
-- Citera testnet
+- Citrea testnet
 - Ink Sepolia
 - Sei testnet
 - Sonic testnet
 - Hoodi
 - Ronin Saigon
+- Tempo testnet
 - Celo sepolia
+- Mantle sepolia
+- Katana Bokuto
+- Intuition testnet
+- Robinhood Chain testnet
+- Arc Testnet
 
 ## **Deployments**
 
@@ -119,6 +134,7 @@ ERC20MultiOperationIncreaseBalanceEnforcer: 0xeaA1bE91F0ea417820a765df9C5BE54228
 ERC721MultiOperationIncreaseBalanceEnforcer: 0x44877cDAFC0d529ab144bb6B0e202eE377C90229
 ERC1155MultiOperationIncreaseBalanceEnforcer: 0x9eB86bbdaA71D4D8d5Fb1B8A9457F04D3344797b
 NativeTokenMultiOperationIncreaseBalanceEnforcer: 0xaD551E9b971C1b0c02c577bFfCFAA20b81777276
+ApprovalRevocationEnforcer: 0xe264F1f09A19505a1ca1a86D5b01E8bFdb64324A
 
 DelegationMetaSwapAdapter
 Ethereum: 0xe41eB5A3F6e35f1A8C77113F372892D09820C3fD
