@@ -318,7 +318,7 @@ Terms use LiFi API `bytes32` for BTC asset id and recipient, and LiFi BTC `desti
 | Contract | v1.3.0 (most chains) |
 |---|---|
 | `DelegationManager` | `0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3` |
-| `LiFiSwapEnforcer` | Deploy per chain — not yet in [`documents/Deployments.md`](documents/Deployments.md) |
+| `LiFiSwapEnforcer` | `0x47472E8AA7012D1c23336aa28514AE94389318f5` — see [`documents/Deployments.md`](documents/Deployments.md) |
 
 LiFi Diamond: use [`deployments/`](https://github.com/lifinance/contracts/tree/main/deployments) from the LI.FI contracts repo for your network.
 

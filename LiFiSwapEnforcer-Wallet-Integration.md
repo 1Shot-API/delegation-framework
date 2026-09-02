@@ -49,7 +49,7 @@ Reference deployments (v1.3.0, same address on most supported chains): see [`doc
 |---|---|
 | `DelegationManager` | Validates delegations; calls enforcer hooks; triggers `executeFromExecutor` on the user's DeleGator |
 | User `DeleGator` (Hybrid / MultiSig / EIP-7702) | Smart account that holds assets and executes LiFi calls |
-| `LiFiSwapEnforcer` | Custom caveat enforcer — **deploy before production use** (not yet in `Deployments.md`) |
+| `LiFiSwapEnforcer` | `0x47472E8AA7012D1c23336aa28514AE94389318f5` (CREATE2; same address on all deployed chains) |
 | `AllowedTargetsEnforcer` + `AllowedMethodsEnforcer` | Recommended for the separate **approve onboarding** delegation |
 | LiFi Diamond (source chain) | Swap/bridge entrypoint — address pinned in terms |
 
