@@ -174,6 +174,130 @@ Note that in this scenario we have the same end recipient (treasury) and the sam
 
 If you are delegating to an EOA in a delegation chain, the EOA cannot execute directly since it cannot redeem inner delegations. The EOA can become a deleGator by using EIP7702 or it can use an adapter contract to execute the delegation. An example for that is available in `./src/helpers/DelegationMetaSwapAdapter.sol`.
 
+### LiFiSwapEnforcer
+
+The `LiFiSwapEnforcer` enables unattended DCA-style swap and bridge delegations through the [LI.FI](https://li.fi) Diamond. A user signs **delegation terms once** (input token, output asset, recipient, destination chain, periodic budget, slippage cap, trusted quote signer, diamond address). At redemption time, a backend quote signer provides a **per-execution signed quote** that binds the exact diamond calldata, amounts, and expiration.
+
+**Prerequisite:** ERC-20 approval to the LiFi Diamond is **not** handled by this enforcer. Set up a separate onboarding delegation (e.g. `AllowedTargetsEnforcer` + `AllowedMethodsEnforcer` on `approve`) before swaps can execute.
+
+#### Terms layout (284 bytes, signed at delegation time)
+
+| Offset | Field | Size | Notes |
+| --- | --- | --- | --- |
+| 0 | `lifiDiamond` | 20 | LiFi Diamond on the source chain |
+| 20 | `inputToken` | 20 | Source-chain ERC-20 (e.g. USDC) |
+| 40 | `outputAssetId` | 32 | Desired output asset; LiFi/API encoding |
+| 72 | `outputRecipient` | 32 | EVM or non-EVM recipient |
+| 104 | `destinationChainId` | 32 | EVM `chainId` or LiFi non-EVM id |
+| 136 | `quoteSigner` | 20 | Trusted backend that signs quotes |
+| 156 | `periodAmount` | 32 | Max input token units per period |
+| 188 | `periodDuration` | 32 | Period length in seconds |
+| 220 | `startDate` | 32 | Schedule start timestamp |
+| 252 | `slippageBps` | 32 | Max slippage; 50 = 0.5% |
+
+Pack with `LiFiSwapQuoteLib.encodeTerms()` or `abi.encodePacked(...)` in the same field order.
+
+#### Args layout (redemption time)
+
+```solidity
+args = abi.encode(SignedLiFiQuote quote, bytes signature)
+```
+
+The `SignedLiFiQuote` struct and signing helpers live in `./src/libraries/LiFiSwapQuoteLib.sol`. Caveat **args are not part of the delegation signature hash** — only `terms` and `enforcer` are hashed when the user signs the delegation. The quote signer therefore controls per-execution calldata and amounts at redemption time, within the bounds of the signed terms.
+
+#### Recipient and asset encoding (`bytes32`)
+
+The enforcer checks **equality** with terms; it does not validate address format. Integrators must use consistent encoding between delegation signing and quote signing.
+
+| Destination | Example `outputRecipient` encoding |
+| --- | --- |
+| EVM address | `bytes32(uint256(uint160(evmAddress)))` |
+| Solana | LiFi API `bytes32` representation of base58 pubkey |
+| Bitcoin | LiFi API `bytes32` representation of BTC address |
+
+For same-chain DCA with an ERC-20 output and on-chain balance verification, use `outputAssetId = bytes32(uint256(uint160(tokenAddress)))`.
+
+Non-EVM chain ids (e.g. Bitcoin) come from the LiFi API — copy from LiFi tooling rather than hardcoding in the enforcer.
+
+#### Signed quote workflow
+
+1. User signs delegation terms (period budget, assets, recipient, destination chain, slippage, quote signer).
+2. Redeemer requests a route from the quote signer backend (e.g. USDC → BTC on Bitcoin).
+3. Backend builds full LiFi diamond calldata, constructs `SignedLiFiQuote`, and signs it (EIP-191 over `keccak256(abi.encode(quote, quote.expiration))`).
+4. Redeemer calls `redeemDelegations` with `args = abi.encode(quote, signature)` and execution targeting `terms.lifiDiamond` with `value == 0`.
+
+#### `beforeHook` checks
+
+1. Execution decodes to `(target, value, callData)` — **single-call, default mode only**.
+2. `target == terms.lifiDiamond`, `value == 0`, `callData.length >= 4`.
+3. Quote signature from `terms.quoteSigner`; quote not expired.
+4. `keccak256(callData) == quote.calldataHash` — **calldata-hash-first** design; no facet-specific ABI decoding in v1.
+5. Quote fields match terms and `_delegator`.
+6. Slippage: `minAmountOut >= expectedAmountOut * (10000 - slippageBps) / 10000`.
+7. Period budget: consume `quote.inputAmount` from `(delegationManager, delegationHash)` allowance (same pattern as `ERC20PeriodTransferEnforcer`).
+
+Any LiFi diamond calldata is allowed if the signed quote's `calldataHash` matches. Native-fee bridges requiring `msg.value > 0` are out of scope for v1.
+
+#### Same-chain vs cross-chain `afterHook`
+
+| Scenario | `afterHook` behavior |
+| --- | --- |
+| Same-chain (`destinationChainId == block.chainid`) and clean EVM `outputRecipient` / `outputAssetId` (high 96 bits zero) | Cache output token balance at recipient in `beforeHook`; verify increase ≥ `quote.minAmountOut` after execution |
+| Cross-chain or non-EVM recipient | **Skip balance check.** Enforcement ends at successful source-chain execution (bridge initiated). Destination delivery cannot be proven on the source chain. |
+
+#### DCA examples
+
+**Same-chain USDC → WBTC (EVM wallet):**
+
+```solidity
+terms: abi.encodePacked(
+    lifiDiamond, USDC,
+    bytes32(uint256(uint160(WBTC))),
+    bytes32(uint256(uint160(userEvmWallet))),
+    uint256(block.chainid),
+    quoteSigner,
+    uint256(10e6), uint256(1 days), startDate, uint256(50)
+)
+```
+
+**Cross-chain USDC on Ethereum → BTC on Bitcoin:**
+
+```solidity
+terms: abi.encodePacked(
+    lifiDiamond, USDC,
+    btcOutputAssetId,        // bytes32 from LiFi API
+    btcRecipientBytes32,     // bytes32 from LiFi API
+    uint256(20000000000001), // LiFi BTC chain id
+    quoteSigner,
+    uint256(10e6), uint256(1 days), startDate, uint256(50)
+)
+```
+
+#### Trust model
+
+- **User (terms):** input token, output asset id, output recipient, destination chain, period budget, slippage cap, quote signer, diamond address.
+- **Quote signer (per execution):** full route calldata, amounts, expiration; signatures must stay consistent with terms.
+- **LiFi Diamond:** swap/bridge execution and protocol-level min-out reverts on the source chain.
+- **Not enforced on-chain:** destination-chain delivery for bridges; absolute market price (requires oracle); recipient address format correctness (equality only).
+
+#### Composition
+
+Pair with separate caveats for token approval to the diamond. Consider `AllowedTargetsEnforcer` if you want to restrict the diamond address independently (redundant if already pinned in terms).
+
+#### Replay binding
+
+The signed quote binds `delegationHash` and the source `chainid` (in `hashQuote`), so a quote signed for one delegation cannot be replayed against another delegation with identical terms, and a quote signed for chain A is invalid on chain B even if the diamond address coincides. Within the quote's validity window, replay against the **same** delegation is still possible; it is bounded by the period budget (each replay consumes `inputAmount`) and by calldata idempotency (the identical diamond calldata usually self-reverts on the second call). A per-quote nonce is not implemented in v1 because it would require off-chain replay tracking by the quote signer.
+
+#### Slippage bounds
+
+`slippageBps` must be **strictly less than** `10000`. At `10000` the slippage check accepts any non-zero `minAmountOut`, effectively disabling protection — the enforcer rejects this value to prevent a footgun. Pick a value such as `50` (0.5%).
+
+#### Trust assumptions
+
+- **`msg.sender` namespacing.** The enforcer keys period-budget and afterHook-context storage by `msg.sender`, expecting it to be the `DelegationManager`. A direct external call to `beforeHook`/`afterHook` only pollutes the caller's own namespace and cannot affect a real delegation's storage (consistent with `ERC20PeriodTransferEnforcer`).
+- **Output token for same-chain `afterHook`.** When on-chain verification applies, `beforeHook` calls `balanceOf` on the user-pinned `outputAssetId` (decoded as an EVM address). `DelegationManager.redeemDelegations` has no `nonReentrant` guard, so this is a reentrancy surface; impact is bounded (period budget already consumed; afterHook context not yet written so a reentrant `afterHook` no-ops). The pinned `outputAssetId` must be a trusted ERC20.
+- **`afterHook` silent no-op.** For cross-chain / non-EVM recipients, `beforeHook` does not set an afterHook context and `afterHook` returns without reverting. This is intentional — destination delivery cannot be proven on the source chain.
+
 ### ApprovalRevocationEnforcer
 
 The `ApprovalRevocationEnforcer` lets a delegator grant a delegate the narrow authority to **clear an existing token approval** on the delegator's behalf, without granting any other power over the delegator's assets. It covers six revocation primitives — three standard token-contract primitives and three against the canonical Permit2 deployment:
