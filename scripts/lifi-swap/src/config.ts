@@ -71,6 +71,16 @@ function parsePrivateKey(): Hex {
   return normalized;
 }
 
+function parseOptionalHexEnv(name: string): Hex | undefined {
+  const raw = optionalEnv(name);
+  if (!raw) return undefined;
+  const normalized = raw.startsWith("0x") ? raw : `0x${raw}`;
+  if (!isHex(normalized)) {
+    throw new Error(`${name} must be a hex string`);
+  }
+  return normalized;
+}
+
 export function loadSwapConfig(overrides: Partial<SwapConfig> = {}): SwapConfig {
   const rpcUrl =
     overrides.rpcUrl ??
@@ -83,7 +93,7 @@ export function loadSwapConfig(overrides: Partial<SwapConfig> = {}): SwapConfig 
     privateKey: overrides.privateKey ?? parsePrivateKey(),
     rpcUrl,
     fromToken: overrides.fromToken ?? parseAddressEnv("LIFI_FROM_TOKEN"),
-    toToken: overrides.toToken ?? parseAddressEnv("LIFI_TO_TOKEN"),
+    toToken: overrides.toToken ?? requireEnv("LIFI_TO_TOKEN"),
     fromAmount: overrides.fromAmount ?? parseBigIntEnv("LIFI_FROM_AMOUNT"),
     toChain: overrides.toChain ?? Number(optionalEnv("LIFI_TO_CHAIN") ?? BASE_CHAIN_ID),
     slippage: overrides.slippage ?? Number(optionalEnv("LIFI_SLIPPAGE") ?? "0.005"),
@@ -94,7 +104,12 @@ export function loadSwapConfig(overrides: Partial<SwapConfig> = {}): SwapConfig 
       Number(optionalEnv("LIFI_PERIOD_DURATION") ?? "86400"),
     slippageBps: overrides.slippageBps ?? Number(optionalEnv("LIFI_SLIPPAGE_BPS") ?? "50"),
     relayerUrl: overrides.relayerUrl ?? optionalEnv("RELAYER_URL") ?? DEFAULT_RELAYER_URL,
-    outputRecipient: overrides.outputRecipient,
+    outputRecipient: overrides.outputRecipient ?? optionalEnv("LIFI_OUTPUT_RECIPIENT"),
+    outputAssetIdOverride:
+      overrides.outputAssetIdOverride ?? parseOptionalHexEnv("LIFI_OUTPUT_ASSET_ID"),
+    outputRecipientBytes32Override:
+      overrides.outputRecipientBytes32Override ??
+      parseOptionalHexEnv("LIFI_OUTPUT_RECIPIENT_BYTES32"),
   };
 }
 

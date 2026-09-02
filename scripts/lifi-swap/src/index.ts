@@ -23,6 +23,7 @@ Create options:
   --period-duration <seconds> Period length (default: LIFI_PERIOD_DURATION)
   --slippage-bps <bps>        On-chain slippage cap (default: LIFI_SLIPPAGE_BPS)
   --to-chain <id>             Destination chain (default: LIFI_TO_CHAIN)
+  --output-recipient <addr>   LiFi toAddress (required for cross-chain; Solana pubkey, BTC address)
   --no-approve                Do not save approve delegation alongside swap grant
   --force                     Overwrite existing saved delegation id
 
@@ -33,7 +34,7 @@ Execute options:
                               Over-budget amounts warn locally; enforcer enforces on-chain
 
 Environment (scripts/lifi-swap/.env):
-  PRIVATE_KEY, BASE_RPC_URL, LIFI_* , RELAYER_URL
+  PRIVATE_KEY, BASE_RPC_URL, LIFI_* , LIFI_OUTPUT_RECIPIENT (cross-chain), RELAYER_URL
 `);
 }
 

@@ -1,7 +1,8 @@
-import { getAddress, type Address, type Hex } from "viem";
+import { getAddress, isAddress, type Address, type Hex } from "viem";
 
-import { LIFI_API_BASE } from "./constants.js";
-import { addressToBytes32 } from "./terms.js";
+import { BASE_CHAIN_ID, LIFI_API_BASE } from "./constants.js";
+import { addressToBytes32, encodeLiFiNonEvmBytes32 } from "./terms.js";
+import type { SavedDelegation } from "./types.js";
 
 export type LiFiQuoteResponse = {
   transactionRequest: {
@@ -22,14 +23,65 @@ export type LiFiQuoteResponse = {
   };
 };
 
+export function isEvmSameChainDest(toChain: number, sourceChain: number): boolean {
+  return toChain === sourceChain;
+}
+
+export function resolveTermsEncodings(params: {
+  toChain: number;
+  sourceChain: number;
+  toToken: string;
+  outputRecipient: string;
+  outputAssetIdOverride?: Hex;
+  outputRecipientBytes32Override?: Hex;
+}): { outputAssetId: Hex; outputRecipient: Hex } {
+  if (isEvmSameChainDest(params.toChain, params.sourceChain)) {
+    if (!isAddress(params.toToken)) {
+      throw new Error(
+        `LIFI_TO_TOKEN must be an EVM address for same-chain swaps: ${params.toToken}`,
+      );
+    }
+    if (!isAddress(params.outputRecipient)) {
+      throw new Error(
+        `Output recipient must be an EVM address for same-chain swaps: ${params.outputRecipient}`,
+      );
+    }
+    return {
+      outputAssetId: addressToBytes32(getAddress(params.toToken)),
+      outputRecipient: addressToBytes32(getAddress(params.outputRecipient)),
+    };
+  }
+
+  return {
+    outputAssetId:
+      params.outputAssetIdOverride ?? encodeLiFiNonEvmBytes32(params.toToken),
+    outputRecipient:
+      params.outputRecipientBytes32Override ??
+      encodeLiFiNonEvmBytes32(params.outputRecipient),
+  };
+}
+
+export function resolveQuoteToAddress(saved: SavedDelegation, delegator: Address): string {
+  if (saved.metadata?.outputRecipient) {
+    return saved.metadata.outputRecipient;
+  }
+  if (isEvmSameChainDest(Number(saved.terms.destinationChainId), BASE_CHAIN_ID)) {
+    return delegator;
+  }
+  throw new Error(
+    "Missing output recipient in saved delegation metadata; recreate with --output-recipient or LIFI_OUTPUT_RECIPIENT",
+  );
+}
+
 export async function fetchLiFiQuote(params: {
   fromChain: number;
   toChain: number;
   fromToken: Address;
-  toToken: Address;
+  toToken: string;
   fromAmount: bigint;
   fromAddress: Address;
   slippage: number;
+  toAddress?: string;
 }): Promise<LiFiQuoteResponse> {
   const url = new URL(`${LIFI_API_BASE}/quote`);
   url.searchParams.set("fromChain", String(params.fromChain));
@@ -39,6 +91,9 @@ export async function fetchLiFiQuote(params: {
   url.searchParams.set("fromAmount", params.fromAmount.toString());
   url.searchParams.set("fromAddress", params.fromAddress);
   url.searchParams.set("slippage", String(params.slippage));
+  if (params.toAddress) {
+    url.searchParams.set("toAddress", params.toAddress);
+  }
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -47,17 +102,6 @@ export async function fetchLiFiQuote(params: {
   }
 
   return (await response.json()) as LiFiQuoteResponse;
-}
-
-export function resolveOutputAssetId(toChain: number, sourceChain: number, toToken: Address): Hex {
-  if (toChain === sourceChain) {
-    return addressToBytes32(toToken);
-  }
-  return addressToBytes32(toToken);
-}
-
-export function resolveOutputRecipient(recipient: Address): Hex {
-  return addressToBytes32(recipient);
 }
 
 export function parseQuoteAmounts(quote: LiFiQuoteResponse): {

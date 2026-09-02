@@ -18,6 +18,8 @@ export type SavedDelegationMetadata = {
   inputSymbol?: string;
   outputSymbol?: string;
   toChain?: string;
+  /** Human-readable LiFi toAddress (EVM, Solana pubkey, BTC address) */
+  outputRecipient?: string;
 };
 
 export type SavedDelegation = {
@@ -27,7 +29,7 @@ export type SavedDelegation = {
   chainId: number;
   delegator: Address;
   delegationHash: Hex;
-  toToken: Address;
+  toToken: string;
   /** Set at create from relayer_getCapabilities; absent on pre-migration saved files */
   relayerTargetAddress?: Address;
   relayerUrl?: string;
@@ -68,7 +70,7 @@ export type SwapConfig = {
   privateKey: Hex;
   rpcUrl: string;
   fromToken: Address;
-  toToken: Address;
+  toToken: string;
   fromAmount: bigint;
   toChain: number;
   slippage: number;
@@ -76,5 +78,8 @@ export type SwapConfig = {
   periodDuration: number;
   slippageBps: number;
   relayerUrl: string;
-  outputRecipient?: Address;
+  /** LiFi toAddress — required for cross-chain create when toChain != Base */
+  outputRecipient?: string;
+  outputAssetIdOverride?: Hex;
+  outputRecipientBytes32Override?: Hex;
 };

@@ -87,9 +87,34 @@ npm run delegation -- create --id usdc-weth-daily --force
 
 `approve` and `execute` use estimate-first submission: mock fee ≥ `minFee` from `relayer_getFeeData`, simulate via `relayer_estimate7710Transaction`, adjust fee from `requiredPaymentAmount` if needed, then send with signed `context`. Use `--dry-run` to see `gasUsed` and `requiredPaymentAmount` without submitting.
 
-## Cross-chain
+## Cross-chain (Solana, Bitcoin)
 
-Set `LIFI_TO_CHAIN` (and matching `LIFI_TO_TOKEN`) when creating the delegation. Terms use LiFi destination chain id and bytes32 asset/recipient encodings. Source-chain `afterHook` will not verify destination delivery.
+See commented recipe blocks in [`.env.example`](./.env.example) for Base → Solana and Base → Bitcoin swaps.
+
+1. Comment out same-chain `LIFI_TO_TOKEN` / `LIFI_TO_CHAIN` defaults and uncomment the cross-chain block.
+2. Set **`LIFI_OUTPUT_RECIPIENT`** to the destination address (Solana pubkey or BTC address). Same-chain Base swaps default to the delegator EOA.
+3. Run `delegation create` — it probes LiFi with `toAddress`, encodes non-EVM `bytes32` terms, and prints `outputAssetId` / `outputRecipient` for verification.
+
+Optional overrides if auto-encoding differs from LiFi quote tooling:
+
+- `LIFI_OUTPUT_ASSET_ID=0x...`
+- `LIFI_OUTPUT_RECIPIENT_BYTES32=0x...`
+
+`LIFI_TO_TOKEN` is a plain string (LiFi API token id): EVM address for same-chain, Solana mint/base58 id, or `bitcoin` for BTC.
+
+**Note:** Source-chain `afterHook` does not verify delivery on non-EVM destination chains — monitor bridge status via LiFi tooling. Verify chain IDs via `GET https://li.quest/v1/chains?chainTypes=SVM,UTXO`.
+
+Example (after editing `.env`):
+
+```bash
+npm run delegation -- create \
+  --id usdc-solana \
+  --output-recipient YOUR_SOLANA_PUBKEY \
+  --period-amount 1000000 \
+  --period-duration 86400
+
+npm run execute -- usdc-solana --amount 500000 --dry-run
+```
 
 ## References
 

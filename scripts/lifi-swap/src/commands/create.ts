@@ -1,4 +1,4 @@
-import { getAddress, type Address } from "viem";
+import { getAddress } from "viem";
 
 import {
   flagBigInt,
@@ -18,12 +18,12 @@ import {
   assertQuoteValueZero,
   extractSymbols,
   fetchLiFiQuote,
-  resolveOutputAssetId,
-  resolveOutputRecipient,
+  isEvmSameChainDest,
+  resolveTermsEncodings,
 } from "../lifi.js";
 import { getChainCapabilities } from "../relayer.js";
 import { delegationExists, saveDelegation } from "../store.js";
-import { addressToBytes32, encodeLiFiTerms } from "../terms.js";
+import { encodeLiFiTerms } from "../terms.js";
 import type { LiFiTermsRecord, SavedDelegation } from "../types.js";
 
 function defaultId(config: ReturnType<typeof loadSwapConfig>): string {
@@ -38,6 +38,7 @@ export async function runCreateCommand(argv: string[]): Promise<void> {
     periodAmount: flagBigInt(flags, "period-amount"),
     periodDuration: flagNumber(flags, "period-duration"),
     slippageBps: flagNumber(flags, "slippage-bps"),
+    outputRecipient: flagString(flags, "output-recipient"),
   });
 
   const id = flagString(flags, "id") ?? defaultId(config);
@@ -53,6 +54,16 @@ export async function runCreateCommand(argv: string[]): Promise<void> {
   const ctx = await createSmartAccountContext(config.privateKey, config.rpcUrl);
   const chainCaps = await getChainCapabilities(BASE_CHAIN_ID, config.relayerUrl);
 
+  const outputRecipient =
+    config.outputRecipient ??
+    (isEvmSameChainDest(config.toChain, BASE_CHAIN_ID) ? getAddress(ctx.delegator) : undefined);
+
+  if (!outputRecipient) {
+    throw new Error(
+      "Cross-chain create requires LIFI_OUTPUT_RECIPIENT or --output-recipient (Solana pubkey, BTC address, etc.)",
+    );
+  }
+
   const probeQuote = await fetchLiFiQuote({
     fromChain: BASE_CHAIN_ID,
     toChain: config.toChain,
@@ -61,18 +72,27 @@ export async function runCreateCommand(argv: string[]): Promise<void> {
     fromAmount: probeAmount,
     fromAddress: ctx.delegator,
     slippage: config.slippage,
+    toAddress: outputRecipient,
   });
   assertQuoteValueZero(probeQuote);
 
   const lifiDiamond = getAddress(probeQuote.transactionRequest.to);
-  const outputRecipientAddress = config.outputRecipient ?? ctx.delegator;
   const startDate = BigInt(Math.floor(Date.now() / 1000));
+
+  const { outputAssetId, outputRecipient: outputRecipientBytes32 } = resolveTermsEncodings({
+    toChain: config.toChain,
+    sourceChain: BASE_CHAIN_ID,
+    toToken: config.toToken,
+    outputRecipient,
+    outputAssetIdOverride: config.outputAssetIdOverride,
+    outputRecipientBytes32Override: config.outputRecipientBytes32Override,
+  });
 
   const terms: LiFiTermsRecord = {
     lifiDiamond,
     inputToken: config.fromToken,
-    outputAssetId: resolveOutputAssetId(config.toChain, BASE_CHAIN_ID, config.toToken),
-    outputRecipient: resolveOutputRecipient(outputRecipientAddress),
+    outputAssetId,
+    outputRecipient: outputRecipientBytes32,
     destinationChainId: String(config.toChain),
     quoteSigner: ctx.account.address,
     periodAmount: config.periodAmount.toString(),
@@ -115,6 +135,7 @@ export async function runCreateCommand(argv: string[]): Promise<void> {
       inputSymbol: symbols.inputSymbol,
       outputSymbol: symbols.outputSymbol,
       toChain: String(config.toChain),
+      outputRecipient,
     },
   };
 
@@ -138,6 +159,11 @@ export async function runCreateCommand(argv: string[]): Promise<void> {
   console.log(`  delegator:       ${ctx.delegator}`);
   console.log(`  delegationHash:  ${delegationHash}`);
   console.log(`  lifiDiamond:     ${lifiDiamond}`);
+  console.log(`  toChain:         ${config.toChain}`);
+  console.log(`  toToken:         ${config.toToken}`);
+  console.log(`  liFiToAddress:   ${outputRecipient}`);
+  console.log(`  outputAssetId:   ${terms.outputAssetId}`);
+  console.log(`  outputRecipient: ${terms.outputRecipient}`);
   console.log(`  periodAmount:    ${terms.periodAmount}`);
   console.log(`  periodDuration:  ${terms.periodDuration}s`);
   console.log(`  startDate:       ${terms.startDate}`);

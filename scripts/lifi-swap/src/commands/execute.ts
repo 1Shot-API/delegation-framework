@@ -13,6 +13,7 @@ import {
   assertQuoteValueZero,
   fetchLiFiQuote,
   parseQuoteAmounts,
+  resolveQuoteToAddress,
 } from "../lifi.js";
 import { encodeQuoteArgs, signQuote, verifyQuoteSigner } from "../quote.js";
 import {
@@ -76,6 +77,8 @@ export async function runExecuteCommand(argv: string[]): Promise<void> {
     );
   }
 
+  const toAddress = resolveQuoteToAddress(saved, ctx.delegator);
+
   const lifiQuote = await fetchLiFiQuote({
     fromChain: BASE_CHAIN_ID,
     toChain: Number(saved.terms.destinationChainId),
@@ -84,6 +87,7 @@ export async function runExecuteCommand(argv: string[]): Promise<void> {
     fromAmount: config.fromAmount,
     fromAddress: ctx.delegator,
     slippage: config.slippage,
+    toAddress,
   });
 
   assertQuoteValueZero(lifiQuote);
