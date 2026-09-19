@@ -1,0 +1,241 @@
+[
+  {
+    "name": "AllowedCalldataEnforcer",
+    "address": "0xc2b0d624c1c4319760c96503ba27c347f3260f55",
+    "args": null
+  },
+  {
+    "name": "AllowedMethodsEnforcer",
+    "address": "0x2c21fd0cb9dc8445cb3fb0dc5e7bb0aca01842b5",
+    "args": null
+  },
+  {
+    "name": "AllowedTargetsEnforcer",
+    "address": "0x7f20f61b1f09b08d970938f6fa563634d65c4eeb",
+    "args": null
+  },
+  {
+    "name": "ApprovalRevocationEnforcer",
+    "address": "0xe264f1f09a19505a1ca1a86d5b01e8bfdb64324a",
+    "args": null
+  },
+  {
+    "name": "ArgsEqualityCheckEnforcer",
+    "address": "0x44b8c6ae3c304213c3e298495e12497ed3e56e41",
+    "args": null
+  },
+  {
+    "name": "BlockNumberEnforcer",
+    "address": "0x5d9818df0ae3f66e9c3d0c5029daf99d1823ca6c",
+    "args": null
+  },
+  {
+    "name": "DelegationManager",
+    "address": "0xdb9b1e94b5b69df7e401ddbede43491141047db3",
+    "args": [
+      "0xB0403B32f54d0Bd752113f4009e8B534C6669f44"
+    ]
+  },
+  {
+    "name": "DeployedEnforcer",
+    "address": "0x24ff2aa430d53a8cd6788018e902e098083dccd2",
+    "args": null
+  },
+  {
+    "name": "EIP7702StatelessDeleGator",
+    "address": "0x63c0c19a282a1b52b07dd5a65b58948a07dae32b",
+    "args": [
+      "0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3",
+      "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
+    ]
+  },
+  {
+    "name": "ERC1155BalanceChangeEnforcer",
+    "address": "0x63c322732695cafbbd488fc6937a0a7b66fc001a",
+    "args": null
+  },
+  {
+    "name": "ERC1155MultiOperationIncreaseBalanceEnforcer",
+    "address": "0x9eb86bbdaa71d4d8d5fb1b8a9457f04d3344797b",
+    "args": null
+  },
+  {
+    "name": "ERC1967Proxy",
+    "address": "0xea2ad262ad0ff9c12a81a23582a20f8f3fc9db9f",
+    "args": [
+      "0x56a9EdB16a0105eb5a4C54f4C062e2868844f3A7",
+      "0x60b5bb3f000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000b0403b32f54d0bd752113f4009e8b534c6669f44"
+    ]
+  },
+  {
+    "name": "ERC20BalanceChangeEnforcer",
+    "address": "0xcdf6ab796408598cea671d79506d7d48e97a5437",
+    "args": null
+  },
+  {
+    "name": "ERC20MultiOperationIncreaseBalanceEnforcer",
+    "address": "0xeaa1be91f0ea417820a765df9c5be542286bffdc",
+    "args": null
+  },
+  {
+    "name": "ERC20PeriodTransferEnforcer",
+    "address": "0x474e3ae7e169e940607cc624da8a15eb120139ab",
+    "args": null
+  },
+  {
+    "name": "ERC20StreamingEnforcer",
+    "address": "0x56c97ae02f233b29fa03502ecc0457266d9be00e",
+    "args": null
+  },
+  {
+    "name": "ERC20TransferAmountEnforcer",
+    "address": "0xf100b0819427117ecf76ed94b358b1a5b5c6d2fc",
+    "args": null
+  },
+  {
+    "name": "ERC721BalanceChangeEnforcer",
+    "address": "0x8afdf96edbbe7e1ed3f5cd89c7e084841e12a09e",
+    "args": null
+  },
+  {
+    "name": "ERC721MultiOperationIncreaseBalanceEnforcer",
+    "address": "0x44877cdafc0d529ab144bb6b0e202ee377c90229",
+    "args": null
+  },
+  {
+    "name": "ERC721TransferEnforcer",
+    "address": "0x3790e6b7233f779b09da74c72b6e94813925b9af",
+    "args": null
+  },
+  {
+    "name": "ExactCalldataBatchEnforcer",
+    "address": "0x982fd5c86bbf425d7d1451f974192d4525113dfd",
+    "args": null
+  },
+  {
+    "name": "ExactCalldataEnforcer",
+    "address": "0x99f2e9bf15ce5ec84685604836f71ab835dbbded",
+    "args": null
+  },
+  {
+    "name": "ExactExecutionBatchEnforcer",
+    "address": "0x1e141e455d08721dd5bcda1baa6ea5633afd5017",
+    "args": null
+  },
+  {
+    "name": "ExactExecutionEnforcer",
+    "address": "0x146713078d39ecc1f5338309c28405ccf85abfbb",
+    "args": null
+  },
+  {
+    "name": "HybridDeleGator",
+    "address": "0x48dbe696a4d990079e039489ba2053b36e8ffec4",
+    "args": [
+      "0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3",
+      "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
+    ]
+  },
+  {
+    "name": "IdEnforcer",
+    "address": "0xc8b5d93463c893401094cc70e66a206fb5987997",
+    "args": null
+  },
+  {
+    "name": "LimitedCallsEnforcer",
+    "address": "0x04658b29f6b82ed55274221a06fc97d318e25416",
+    "args": null
+  },
+  {
+    "name": "LogicalOrWrapperEnforcer",
+    "address": "0xe1302607a3251af54c3a6e69318d6aa07f5eb46c",
+    "args": [
+      "0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3"
+    ]
+  },
+  {
+    "name": "MultiSigDeleGator",
+    "address": "0x56a9edb16a0105eb5a4c54f4c062e2868844f3a7",
+    "args": [
+      "0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3",
+      "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
+    ]
+  },
+  {
+    "name": "MultiTokenPeriodEnforcer",
+    "address": "0xfb2f1a9bd76d3701b730e5d69c3219d42d80ebb7",
+    "args": null
+  },
+  {
+    "name": "NativeBalanceChangeEnforcer",
+    "address": "0xbd7b277507723490cd50b12eaafe87c616be6880",
+    "args": null
+  },
+  {
+    "name": "NativeTokenMultiOperationIncreaseBalanceEnforcer",
+    "address": "0xad551e9b971c1b0c02c577bffcfaa20b81777276",
+    "args": null
+  },
+  {
+    "name": "NativeTokenPaymentEnforcer",
+    "address": "0x4803a326dded6ddbc60e659e5ed12d85c7582811",
+    "args": [
+      "0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3",
+      "0x44B8C6ae3C304213c3e298495e12497Ed3E56E41"
+    ]
+  },
+  {
+    "name": "NativeTokenPeriodTransferEnforcer",
+    "address": "0x9bc0faf4aca5ae429f4c06aeeac517520cb16bd9",
+    "args": null
+  },
+  {
+    "name": "NativeTokenStreamingEnforcer",
+    "address": "0xd10b97905a320b13a0608f7e9cc506b56747df19",
+    "args": null
+  },
+  {
+    "name": "NativeTokenTransferAmountEnforcer",
+    "address": "0xf71af580b9c3078fbc2bbf16fbb8eed82b330320",
+    "args": null
+  },
+  {
+    "name": "NonceEnforcer",
+    "address": "0xde4f2fac4b3d87a1d9953ca5fc09fca7f366254f",
+    "args": null
+  },
+  {
+    "name": "OwnershipTransferEnforcer",
+    "address": "0x7eef9734e7092032b5c56310eb9bbd1f4a524681",
+    "args": null
+  },
+  {
+    "name": "RedeemerEnforcer",
+    "address": "0xe144b0b2618071b4e56f746313528a669c7e65c5",
+    "args": null
+  },
+  {
+    "name": "SCL_RIP7212",
+    "address": "0xccd3b747f3dbd349fa3af4ebc7d0c31ae6f21dd1",
+    "args": null
+  },
+  {
+    "name": "SimpleFactory",
+    "address": "0x69aa2f9fe1572f1b640e1bbc512f5c3a734fc77c",
+    "args": null
+  },
+  {
+    "name": "SpecificActionERC20TransferBatchEnforcer",
+    "address": "0x6649b61c873f6f9686a1e1ae9ee98ac380c7ba13",
+    "args": null
+  },
+  {
+    "name": "TimestampEnforcer",
+    "address": "0x1046bb45c8d673d4ea75321280db34899413c069",
+    "args": null
+  },
+  {
+    "name": "ValueLteEnforcer",
+    "address": "0x92bf12322527caa612fd31a0e810472bbb106a8f",
+    "args": null
+  }
+]
