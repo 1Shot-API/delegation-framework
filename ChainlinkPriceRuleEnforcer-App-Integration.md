@@ -415,7 +415,7 @@ Flip LiFi terms: `inputToken = WETH`, output = USDC. Ensure WETH approve delegat
 
 | Contract / feed | Address |
 |---|---|
-| `ChainlinkPriceRuleEnforcer` | `0x4dAEbF9C5813EFF2606acD41BA25e57841e7cb75` |
+| `ChainlinkPriceRuleEnforcer` | `0x4dAEbF9C5813EFF2606acD41BA25e57841e7cb75` (same address on Base, Ethereum, and Arc) |
 | `DelegationManager` | `0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3` |
 | `LiFiSwapEnforcer` | `0x64a9B2277dcDD134e78d30bEe11c3056e8E56ffE` |
 | ETH/USD feed | `0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70` |
@@ -423,7 +423,7 @@ Flip LiFi terms: `inputToken = WETH`, output = USDC. Ensure WETH approve delegat
 
 LiFi Diamond: use [LI.FI deployments](https://github.com/lifinance/contracts/tree/main/deployments) for your network.
 
-Other chains: deploy enforcer via [`script/DeployChainlinkPriceRuleEnforcer.s.sol`](script/DeployChainlinkPriceRuleEnforcer.s.sol) with `SALT=GATOR` for CREATE2 deterministic address (once deployed on each chain).
+The enforcer address above is already deployed on Base (8453), Ethereum (1), and Arc (5042) via [`script/DeployChainlinkPriceRuleEnforcer.s.sol`](script/DeployChainlinkPriceRuleEnforcer.s.sol) with `SALT=GATOR`. The feed addresses in this table are Base mainnet feeds.
 
 ## Bot / backend checklist
 

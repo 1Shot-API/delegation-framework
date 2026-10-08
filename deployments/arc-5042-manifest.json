@@ -30,6 +30,11 @@
     "args": null
   },
   {
+    "name": "ChainlinkPriceRuleEnforcer",
+    "address": "0x4daebf9c5813eff2606acd41ba25e57841e7cb75",
+    "args": null
+  },
+  {
     "name": "DelegationManager",
     "address": "0xdb9b1e94b5b69df7e401ddbede43491141047db3",
     "args": [

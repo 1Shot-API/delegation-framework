@@ -246,7 +246,7 @@ When the full PoC `eth_call` fails, the CLI runs **fee-only** and **swap-only** 
 
 Stack [`ChainlinkPriceRuleEnforcer`](../../src/enforcers/ChainlinkPriceRuleEnforcer.sol) with LiFi for buy-the-dip, take-profit, and absolute price triggers. Use a **separate create command** — plain `delegation create` stays LiFi-only.
 
-Deployed on Base mainnet: `0x4dAEbF9C5813EFF2606acD41BA25e57841e7cb75`
+Deployed on Base, Ethereum, and Arc at `0x4dAEbF9C5813EFF2606acD41BA25e57841e7cb75`
 
 ### Env (feed + staleness only)
 
