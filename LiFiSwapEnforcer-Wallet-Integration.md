@@ -150,7 +150,8 @@ The enforcer checks **equality** only; it does not validate address format.
 |---|---|
 | EVM address | `bytes32(uint256(uint160(evmAddress)))` |
 | Native ETH | `bytes32(0)` — the enforcer verifies output via `recipient.balance` in `afterHook` |
-| Solana / Bitcoin / other non-EVM | Use LiFi API `bytes32` representation — must match what the quote signer uses |
+| Bitcoin (bc1q) | LiFi's 5-bit witness-program `bytes32`, not a hash of the text |
+| Solana pubkey or SPL mint | Raw 32-byte base58 decode. A Solana address is 32–44 characters; do not `keccak256` it. The same encoding is `terms.outputAssetId` for the mint. |
 
 For same-chain DCA with on-chain output verification, set:
 
@@ -245,7 +246,7 @@ When the dapp redeems, the enforcer requires:
 - **Value:** `0` for ERC20 input, or `inputAmount` when `inputToken == address(0)` (native ETH input)
 - **Calldata hash:** `keccak256(callData) == quote.calldataHash` (signed by quote signer)
 - **Calldata shape:** the enforcer decodes the calldata per the `RouteKind` supplied in args and asserts the **recipient** and **destination chain** embedded in the calldata equal `terms.outputRecipient` and `terms.destinationChainId`. The calldata must therefore match terms not only by hash but also by decoded recipient/dest-chain. See the App integration guide's "RouteKind: selecting the decode branch" section for the per-route decode rules.
-- **Args:** must carry a `RouteKind` (0=SameChain, 1=EvmBridge, 2=NearBtc, 3=LayerSwapBtc) as the first element of the 3-tuple `(RouteKind, SignedLiFiQuote, signature)`. The wallet sets `args = ""` at grant time; the dapp/quote-signer fills `RouteKind` + quote + signature at redemption. `RouteKind` is not in the delegation hash.
+- **Args:** must carry a `RouteKind` (0=SameChain, 1=EvmBridge, 2=NearBtc, 3=LayerSwapBtc, 4=MayanNonEvm, 5=AllbridgeNonEvm) as the first element of the 3-tuple `(RouteKind, SignedLiFiQuote, signature)`. The wallet sets `args = ""` at grant time; the dapp/quote-signer fills `RouteKind` + quote + signature at redemption. `RouteKind` is not in the delegation hash. Kinds 4 and 5 cover Solana (and other non-EVM chains) via Mayan and Allbridge. See the App integration guide for the per-route decode rules, including Mayan's `refundRecipient == delegator` check and Allbridge's `receiveToken` check.
 - **Period budget:** `quote.inputAmount` consumed from `(delegationManager, delegationHash)` allowance
 - **Slippage:** `quote.minAmountOut >= quote.expectedAmountOut * (10000 - slippageBps) / 10000`
 

@@ -48,6 +48,21 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
     bytes4 private constant SEL_LAYERSWAP_START = 0xee9e98e0;
     bytes4 private constant SEL_LAYERSWAP_SWAP = 0x4c279d6b;
 
+    // MayanFacet selectors (EVM -> non-EVM, including Solana). Derived from the current
+    // lifinance/contracts `MayanData` head: `nonEVMReceiver` is the first word and
+    // `refundRecipient` is the static address at struct +0xE0.
+    // startBridgeTokensViaMayan(BridgeData,(bytes32,address,bytes,address,bytes,address,uint256,address,uint256))
+    bytes4 private constant SEL_MAYAN_START = 0xb4875292;
+    // swapAndStartBridgeTokensViaMayan(BridgeData,SwapData[],MayanData)
+    bytes4 private constant SEL_MAYAN_SWAP = 0x80c65808;
+
+    // AllBridgeFacet selectors. `AllBridgeData.recipient` is the first word;
+    // `receiveToken` is the static bytes32 at struct +0x40.
+    // startBridgeTokensViaAllBridge(BridgeData,(bytes32,uint256,bytes32,uint256,uint8,bool))
+    bytes4 private constant SEL_ALLBRIDGE_START = 0x6a51e9a9;
+    // swapAndStartBridgeTokensViaAllBridge(BridgeData,SwapData[],AllBridgeData)
+    bytes4 private constant SEL_ALLBRIDGE_SWAP = 0x63267469;
+
     struct PeriodicAllowance {
         uint256 periodAmount;
         uint256 periodDuration;
@@ -132,8 +147,8 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
         address _redeemer
     )
         public
-        override
         virtual
+        override
         onlySingleCallTypeMode(_mode)
         onlyDefaultExecutionMode(_mode)
     {
@@ -143,15 +158,9 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
         (LiFiSwapQuoteLib.RouteKind routeKind_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_, bytes memory signature_) =
             _decodeArgs(_args);
 
-        (address target_, uint256 value_, bytes calldata callData_) = _executionCallData.decodeSingle();
-
-        require(target_ == terms_.lifiDiamond, "LiFiSwapEnforcer:invalid-target");
-        // Native ETH input (inputToken == address(0)) requires value == inputAmount; ERC20 input requires value == 0.
-        if (terms_.inputToken == address(0)) {
-            require(value_ == quote_.inputAmount, "LiFiSwapEnforcer:invalid-native-value");
-        } else {
-            require(value_ == 0, "LiFiSwapEnforcer:invalid-value");
-        }
+        // Target and value checks live in a helper so this function can also pass `_delegator` into
+        // calldata verification without crossing Solidity's stack limit.
+        bytes calldata callData_ = _validateTargetAndValue(terms_, quote_, _executionCallData);
         require(callData_.length >= 4, "LiFiSwapEnforcer:invalid-calldata-length");
         require(block.timestamp < quote_.expiration, "LiFiSwapEnforcer:quote-expired");
         require(
@@ -162,15 +171,13 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
 
         _validateQuoteMatchesTerms(quote_, terms_, _delegator);
         require(
-            LiFiSwapQuoteLib.minAmountOutMeetsSlippage(
-                quote_.minAmountOut, quote_.expectedAmountOut, terms_.slippageBps
-            ),
+            LiFiSwapQuoteLib.minAmountOutMeetsSlippage(quote_.minAmountOut, quote_.expectedAmountOut, terms_.slippageBps),
             "LiFiSwapEnforcer:slippage-exceeded"
         );
 
         // Decode the LiFi calldata and assert destination chain + recipient match terms. Runs after the
         // quote<->terms metadata checks so those cheaper mismatches surface first.
-        _verifyCalldataMatchesTerms(terms_, routeKind_, callData_);
+        _verifyCalldataMatchesTerms(terms_, routeKind_, callData_, _delegator);
 
         _validateAndConsumePeriod(terms_, quote_.inputAmount, _delegationHash, _redeemer);
 
@@ -184,7 +191,8 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
      *      destination delivery cannot be proven on the source chain. The silent no-op is intentional.
      */
     function afterHook(
-        bytes calldata /* _terms */,
+        bytes calldata,
+        /* _terms */
         bytes calldata,
         ModeCode _mode,
         bytes calldata,
@@ -209,25 +217,37 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
         uint256 balanceAfter_ = context_.outputToken == address(0)
             ? context_.recipient.balance
             : IERC20(context_.outputToken).balanceOf(context_.recipient);
-        require(
-            balanceAfter_ >= context_.balanceBefore + context_.minAmountOut,
-            "LiFiSwapEnforcer:insufficient-output-received"
-        );
+        require(balanceAfter_ >= context_.balanceBefore + context_.minAmountOut, "LiFiSwapEnforcer:insufficient-output-received");
     }
 
     ////////////////////////////// Internal Methods //////////////////////////////
 
+    /// @dev Native ETH input (`inputToken == address(0)`) requires `value == inputAmount`. ERC20 input requires `value == 0`.
+    function _validateTargetAndValue(
+        LiFiSwapQuoteLib.Terms memory _terms,
+        LiFiSwapQuoteLib.SignedLiFiQuote memory _quote,
+        bytes calldata _executionCallData
+    )
+        private
+        pure
+        returns (bytes calldata callData_)
+    {
+        (address target_, uint256 value_, bytes calldata decodedCallData_) = _executionCallData.decodeSingle();
+        require(target_ == _terms.lifiDiamond, "LiFiSwapEnforcer:invalid-target");
+        if (_terms.inputToken == address(0)) {
+            require(value_ == _quote.inputAmount, "LiFiSwapEnforcer:invalid-native-value");
+        } else {
+            require(value_ == 0, "LiFiSwapEnforcer:invalid-value");
+        }
+        callData_ = decodedCallData_;
+    }
+
     function _decodeArgs(bytes calldata _args)
         private
         pure
-        returns (
-            LiFiSwapQuoteLib.RouteKind routeKind_,
-            LiFiSwapQuoteLib.SignedLiFiQuote memory quote_,
-            bytes memory signature_
-        )
+        returns (LiFiSwapQuoteLib.RouteKind routeKind_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_, bytes memory signature_)
     {
-        (routeKind_, quote_, signature_) =
-            abi.decode(_args, (LiFiSwapQuoteLib.RouteKind, LiFiSwapQuoteLib.SignedLiFiQuote, bytes));
+        (routeKind_, quote_, signature_) = abi.decode(_args, (LiFiSwapQuoteLib.RouteKind, LiFiSwapQuoteLib.SignedLiFiQuote, bytes));
     }
 
     function _validateQuoteMatchesTerms(
@@ -317,8 +337,7 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
         bytes32 contextKey_ = _getContextKey(_delegationHash);
         delete afterHookContexts[contextKey_];
 
-        if (!LiFiSwapQuoteLib.shouldVerifyOutputOnChain(_terms.destinationChainId, _terms.outputRecipient, _terms.outputAssetId))
-        {
+        if (!LiFiSwapQuoteLib.shouldVerifyOutputOnChain(_terms.destinationChainId, _terms.outputRecipient, _terms.outputAssetId)) {
             return;
         }
 
@@ -326,9 +345,7 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
         address outputToken_ = isNative_ ? address(0) : LiFiSwapQuoteLib.toEvmAddress(_terms.outputAssetId);
         address recipient_ = LiFiSwapQuoteLib.toEvmAddress(_terms.outputRecipient);
 
-        uint256 balanceBefore_ = isNative_
-            ? recipient_.balance
-            : IERC20(outputToken_).balanceOf(recipient_);
+        uint256 balanceBefore_ = isNative_ ? recipient_.balance : IERC20(outputToken_).balanceOf(recipient_);
 
         afterHookContexts[contextKey_] = AfterHookContext({
             enabled: true,
@@ -354,9 +371,7 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
 
         uint256 alreadyTransferred_ = isNewPeriod_ ? 0 : _allowance.transferredInCurrentPeriod;
 
-        availableAmount_ = _allowance.periodAmount > alreadyTransferred_
-            ? _allowance.periodAmount - alreadyTransferred_
-            : 0;
+        availableAmount_ = _allowance.periodAmount > alreadyTransferred_ ? _allowance.periodAmount - alreadyTransferred_ : 0;
     }
 
     function _getContextKey(bytes32 _delegationHash) private view returns (bytes32) {
@@ -372,8 +387,12 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
     function _verifyCalldataMatchesTerms(
         LiFiSwapQuoteLib.Terms memory _terms,
         LiFiSwapQuoteLib.RouteKind _routeKind,
-        bytes calldata _callData
-    ) private view {
+        bytes calldata _callData,
+        address _delegator
+    )
+        private
+        view
+    {
         require(_callData.length >= 4, "LiFiSwapEnforcer:calldata-too-short");
         bytes4 selector_ = bytes4(_callData[:4]);
 
@@ -381,10 +400,11 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
             _verifySameChain(_terms, selector_, _callData);
         } else if (_routeKind == LiFiSwapQuoteLib.RouteKind.EvmBridge) {
             _verifyEvmBridge(_terms, _callData);
-        } else if (_routeKind == LiFiSwapQuoteLib.RouteKind.NearBtc) {
-            _verifyNonEvmBtc(_terms, selector_, _callData, 0x00); // NEAR: nonEVMReceiver is 1st field
-        } else if (_routeKind == LiFiSwapQuoteLib.RouteKind.LayerSwapBtc) {
-            _verifyNonEvmBtc(_terms, selector_, _callData, 0x60); // LayerSwap: nonEVMReceiver is 4th field
+        } else if (
+            _routeKind == LiFiSwapQuoteLib.RouteKind.NearBtc || _routeKind == LiFiSwapQuoteLib.RouteKind.LayerSwapBtc
+                || _routeKind == LiFiSwapQuoteLib.RouteKind.MayanNonEvm || _routeKind == LiFiSwapQuoteLib.RouteKind.AllbridgeNonEvm
+        ) {
+            _verifyNonEvmReceiver(_terms, selector_, _callData, _routeKind, _delegator);
         } else {
             revert("LiFiSwapEnforcer:unsupported-route");
         }
@@ -393,11 +413,7 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
     /// @dev Same-chain EVM swap via GenericSwapFacetV3. No BridgeData; destination chain is not in calldata,
     ///      so it is asserted via `terms.destinationChainId == block.chainid`. `_receiver` is the 4th param
     ///      head at calldata offset 0x64 (4-byte selector + 0x60).
-    function _verifySameChain(
-        LiFiSwapQuoteLib.Terms memory _terms,
-        bytes4 _selector,
-        bytes calldata _callData
-    ) private view {
+    function _verifySameChain(LiFiSwapQuoteLib.Terms memory _terms, bytes4 _selector, bytes calldata _callData) private view {
         require(_terms.destinationChainId == block.chainid, "LiFiSwapEnforcer:route-dest-chain-mismatch");
         require(LiFiSwapQuoteLib.isCleanEvmAddress(_terms.outputRecipient), "LiFiSwapEnforcer:route-recipient-shape-mismatch");
         require(_isGenericSwapSelector(_selector), "LiFiSwapEnforcer:route-selector-mismatch");
@@ -421,36 +437,60 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
         require(destChain_ == _terms.destinationChainId, "LiFiSwapEnforcer:calldata-dest-chain-mismatch");
     }
 
-    /// @dev EVM-to-BTC via a bridge whose bridge-specific struct carries `nonEVMReceiver`. `nonEvmFieldOff_`
-    ///      is the offset of `nonEVMReceiver` within that struct (0x00 for NEAR, 0x60 for LayerSwap).
-    function _verifyNonEvmBtc(
+    /// @dev Cross-chain route whose bridge-specific struct carries a `bytes32` recipient.
+    ///      Offset is 0x00 for NEAR, Mayan, and Allbridge, and 0x60 for LayerSwap.
+    ///      Mayan also pins `refundRecipient` (struct +0xE0) to the delegator. Allbridge also pins
+    ///      `receiveToken` (struct +0x40) to `terms.outputAssetId`.
+    function _verifyNonEvmReceiver(
         LiFiSwapQuoteLib.Terms memory _terms,
         bytes4 _selector,
         bytes calldata _callData,
-        uint256 nonEvmFieldOff_
-    ) private view {
+        LiFiSwapQuoteLib.RouteKind _routeKind,
+        address _delegator
+    )
+        private
+        view
+    {
         require(_terms.destinationChainId != block.chainid, "LiFiSwapEnforcer:route-dest-chain-mismatch");
         require(!LiFiSwapQuoteLib.isCleanEvmAddress(_terms.outputRecipient), "LiFiSwapEnforcer:route-recipient-shape-mismatch");
 
-        bool isNear_ = nonEvmFieldOff_ == 0x00;
-        bool isLayerSwap_ = nonEvmFieldOff_ == 0x60;
-        if (isNear_) {
+        uint256 nonEvmFieldOff_;
+        if (_routeKind == LiFiSwapQuoteLib.RouteKind.NearBtc) {
             require(_selector == SEL_NEAR_START || _selector == SEL_NEAR_SWAP, "LiFiSwapEnforcer:route-selector-mismatch");
-        } else if (isLayerSwap_) {
-            require(
-                _selector == SEL_LAYERSWAP_START || _selector == SEL_LAYERSWAP_SWAP,
-                "LiFiSwapEnforcer:route-selector-mismatch"
-            );
+            nonEvmFieldOff_ = 0x00;
+        } else if (_routeKind == LiFiSwapQuoteLib.RouteKind.LayerSwapBtc) {
+            require(_selector == SEL_LAYERSWAP_START || _selector == SEL_LAYERSWAP_SWAP, "LiFiSwapEnforcer:route-selector-mismatch");
+            nonEvmFieldOff_ = 0x60;
+        } else if (_routeKind == LiFiSwapQuoteLib.RouteKind.MayanNonEvm) {
+            require(_selector == SEL_MAYAN_START || _selector == SEL_MAYAN_SWAP, "LiFiSwapEnforcer:route-selector-mismatch");
+            nonEvmFieldOff_ = 0x00;
+        } else if (_routeKind == LiFiSwapQuoteLib.RouteKind.AllbridgeNonEvm) {
+            require(_selector == SEL_ALLBRIDGE_START || _selector == SEL_ALLBRIDGE_SWAP, "LiFiSwapEnforcer:route-selector-mismatch");
+            nonEvmFieldOff_ = 0x00;
         } else {
             revert("LiFiSwapEnforcer:unsupported-route");
         }
 
-        (uint256 bd_, uint256 structBody_) = _bridgeSpecificStructBody(_callData);
+        // The selector picks the head slot. hasSourceSwaps must agree with it: a lying flag
+        // would otherwise point the read at a different word than the bridge struct.
+        (uint256 bd_, uint256 headSlot_) = _nonEvmHeadSlot(_selector, _callData);
+        // AllBridgeData is a static tuple, so it is inlined at the head slot. The other non-EVM
+        // structs contain dynamic fields and sit behind the offset stored in that slot.
+        uint256 structBody_ =
+            _routeKind == LiFiSwapQuoteLib.RouteKind.AllbridgeNonEvm ? headSlot_ : 0x04 + uint256(_readWord(_callData, headSlot_));
         bytes32 nonEvmReceiver_ = _readWord(_callData, structBody_ + nonEvmFieldOff_);
         require(nonEvmReceiver_ == _terms.outputRecipient, "LiFiSwapEnforcer:calldata-recipient-mismatch");
 
         uint256 destChain_ = uint256(_readWord(_callData, bd_ + 0xE0));
         require(destChain_ == _terms.destinationChainId, "LiFiSwapEnforcer:calldata-dest-chain-mismatch");
+
+        if (_routeKind == LiFiSwapQuoteLib.RouteKind.MayanNonEvm) {
+            address refundRecipient_ = address(uint160(uint256(_readWord(_callData, structBody_ + 0xE0))));
+            require(refundRecipient_ == _delegator, "LiFiSwapEnforcer:mayan-refund-recipient-mismatch");
+        } else if (_routeKind == LiFiSwapQuoteLib.RouteKind.AllbridgeNonEvm) {
+            bytes32 receiveToken_ = _readWord(_callData, structBody_ + 0x40);
+            require(receiveToken_ == _terms.outputAssetId, "LiFiSwapEnforcer:allbridge-receive-token-mismatch");
+        }
     }
 
     /// @dev Returns the absolute offset of the `ILiFi.BridgeData` body within `_callData`. The body sits
@@ -460,23 +500,18 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
         bd_ = 0x04 + bdOff_;
     }
 
-    /// @dev Returns (bridgeData body absolute, bridge-specific struct body absolute). The bridge-specific
-    ///      struct sits behind a head offset in `param[1]` (calldata 0x44) when there are no source swaps,
-    ///      or `param[2]` (calldata 0x64) when `BridgeData.hasSourceSwaps` (read @ +0x100) is true.
-    function _bridgeSpecificStructBody(bytes calldata _callData)
-        private
-        pure
-        returns (uint256 bd_, uint256 structBody_)
-    {
+    /// @dev Head slot of the bridge-specific argument. `start*` selectors are two-parameter calls
+    ///      (slot `0x24`) and require `hasSourceSwaps == false`. `swapAndStart*` selectors are
+    ///      three-parameter calls (slot `0x44`) and require `hasSourceSwaps == true`.
+    ///      Those are `bytes calldata` offsets. `CalldataVerificationFacet` reads the same heads at
+    ///      memory `0x44` / `0x64` because `bytes memory` carries a `0x20` length prefix.
+    function _nonEvmHeadSlot(bytes4 _selector, bytes calldata _callData) private pure returns (uint256 bd_, uint256 headSlot_) {
         bd_ = _bridgeDataBody(_callData);
         bool hasSourceSwaps_ = uint256(_readWord(_callData, bd_ + 0x100)) != 0;
-        // Head slot holding the bridge-specific struct offset: param[1] @ calldata 0x24 (no source swaps,
-        // 2 params) or param[2] @ calldata 0x44 (with source swaps, 3 params). Note these are bytes-calldata
-        // offsets (no length prefix); the equivalent bytes-memory offsets in CalldataVerificationFacet
-        // are 0x44 / 0x64 because bytes memory carries a 0x20 length prefix.
-        uint256 headSlotAbs_ = hasSourceSwaps_ ? 0x44 : 0x24;
-        uint256 structOff_ = uint256(_readWord(_callData, headSlotAbs_));
-        structBody_ = 0x04 + structOff_;
+        bool isSwapSelector_ = _selector == SEL_NEAR_SWAP || _selector == SEL_LAYERSWAP_SWAP || _selector == SEL_MAYAN_SWAP
+            || _selector == SEL_ALLBRIDGE_SWAP;
+        require(hasSourceSwaps_ == isSwapSelector_, "LiFiSwapEnforcer:source-swaps-mismatch");
+        headSlot_ = isSwapSelector_ ? 0x44 : 0x24;
     }
 
     function _isGenericSwapSelector(bytes4 _selector) private pure returns (bool) {

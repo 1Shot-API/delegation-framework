@@ -361,6 +361,8 @@ If you created an EVM bridge delegation before this encoding fix, **recreate wit
 
 Use route flags plus `--output-address` for the destination recipient (bech32, Solana pubkey, etc.).
 
+**Solana:** pubkeys and SPL mints are the raw 32-byte base58 decode, not a hash of the base58 text. Mayan quotes use route kind `MayanNonEvm` (4); Allbridge quotes use `AllbridgeNonEvm` (5). The Mayan path also requires `refundRecipient` to be the delegator.
+
 **Bitcoin (bc1q P2WPKH):** bech32 addresses are encoded to LiFi’s binary `bytes32` (witness program as 5-bit words), **not** keccak256 of the ASCII string. If you created a BTC bridge delegation before this fix, **recreate with `--force`** (e.g. `usdc-btc-bridge-2min`).
 
 ```bash

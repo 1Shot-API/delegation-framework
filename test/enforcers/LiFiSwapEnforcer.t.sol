@@ -38,6 +38,11 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
     uint256 public minAmountOut = 100;
 
     uint256 public constant LIFI_CHAIN_ID_BTC = 20_000_000_000_001;
+    /// @dev LiFi's Solana chain id ("solana" as concatenated ASCII decimals). Used only by tests.
+    uint256 public constant LIFI_CHAIN_ID_SOLANA = 1_151_111_081_099_710;
+    /// @dev Non-clean 32-byte pubkey stand-in (high 96 bits nonzero).
+    bytes32 internal constant SOLANA_RECIPIENT = 0x8c5b2a3e1f0d9c7b6a5e4d3c2b1a091827364554433221100ffeeddccbbaa998;
+    bytes32 internal constant SOLANA_MINT = 0x069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f00000000001;
 
     function setUp() public override {
         super.setUp();
@@ -69,8 +74,7 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
         (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) = _btcTermsAndQuote(btcRecipient_);
         bytes memory bridgeCalldata_ = _buildNearBtcCalldata(btcRecipient_);
         bytes memory execData_ = _encodeSingleExecution(address(mockDiamond), 0, bridgeCalldata_);
-        bytes memory args_ =
-            _encodeArgsWithRoute(LiFiSwapQuoteLib.RouteKind.NearBtc, quote_, bridgeCalldata_, dummyDelegationHash);
+        bytes memory args_ = _encodeArgsWithRoute(LiFiSwapQuoteLib.RouteKind.NearBtc, quote_, bridgeCalldata_, dummyDelegationHash);
 
         vm.prank(address(delegationManager));
         lifiSwapEnforcer.beforeHook(
@@ -83,8 +87,7 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
         (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) = _btcTermsAndQuote(btcRecipient_);
         bytes memory bridgeCalldata_ = _buildNearBtcCalldata(btcRecipient_);
         bytes memory execData_ = _encodeSingleExecution(address(mockDiamond), 0, bridgeCalldata_);
-        bytes memory args_ =
-            _encodeArgsWithRoute(LiFiSwapQuoteLib.RouteKind.NearBtc, quote_, bridgeCalldata_, dummyDelegationHash);
+        bytes memory args_ = _encodeArgsWithRoute(LiFiSwapQuoteLib.RouteKind.NearBtc, quote_, bridgeCalldata_, dummyDelegationHash);
 
         vm.prank(address(delegationManager));
         lifiSwapEnforcer.beforeHook(
@@ -206,7 +209,8 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
     function test_revert_layerSwapBtc_recipientMismatch() public {
         bytes32 btcRecipientTerms_ = 0x050c01161e111701130c030c1a1b0d10060310180f1d100f110418040e12030f;
         bytes32 btcRecipientCalldata_ = 0x050c01161e111701130c030c1a1b0d10060310180f1d100f110418040e1203ff; // differs
-        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) = _btcTermsAndQuote(btcRecipientTerms_);
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _btcTermsAndQuote(btcRecipientTerms_);
         bytes memory bridgeCalldata_ = _buildLayerSwapBtcCalldata(btcRecipientCalldata_);
         bytes memory execData_ = _encodeSingleExecution(address(mockDiamond), 0, bridgeCalldata_);
         bytes memory args_ =
@@ -222,16 +226,173 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
     function test_revert_nearBtc_recipientMismatch() public {
         bytes32 btcRecipientTerms_ = 0x050c01161e111701130c030c1a1b0d10060310180f1d100f110418040e12030f;
         bytes32 btcRecipientCalldata_ = 0x050c01161e111701130c030c1a1b0d10060310180f1d100f110418040e1203ff;
-        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) = _btcTermsAndQuote(btcRecipientTerms_);
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _btcTermsAndQuote(btcRecipientTerms_);
         bytes memory bridgeCalldata_ = _buildNearBtcCalldata(btcRecipientCalldata_);
         bytes memory execData_ = _encodeSingleExecution(address(mockDiamond), 0, bridgeCalldata_);
-        bytes memory args_ =
-            _encodeArgsWithRoute(LiFiSwapQuoteLib.RouteKind.NearBtc, quote_, bridgeCalldata_, dummyDelegationHash);
+        bytes memory args_ = _encodeArgsWithRoute(LiFiSwapQuoteLib.RouteKind.NearBtc, quote_, bridgeCalldata_, dummyDelegationHash);
 
         vm.prank(address(delegationManager));
         vm.expectRevert("LiFiSwapEnforcer:calldata-recipient-mismatch");
         lifiSwapEnforcer.beforeHook(
             LiFiSwapQuoteLib.encodeTerms(terms_), args_, singleDefaultMode, execData_, dummyDelegationHash, alice, redeemer
+        );
+    }
+
+    ////////////////////// Calldata verification: Mayan / Allbridge (Solana and other non-EVM) //////////////////////
+
+    function test_beforeHook_acceptsValidMayanSwapQuote() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildMayanCalldata(SOLANA_RECIPIENT, alice, LIFI_CHAIN_ID_SOLANA, true);
+        _runRoutedBeforeHook(terms_, quote_, LiFiSwapQuoteLib.RouteKind.MayanNonEvm, bridgeCalldata_);
+    }
+
+    function test_beforeHook_acceptsValidMayanStartQuote() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildMayanCalldata(SOLANA_RECIPIENT, alice, LIFI_CHAIN_ID_SOLANA, false);
+        _runRoutedBeforeHook(terms_, quote_, LiFiSwapQuoteLib.RouteKind.MayanNonEvm, bridgeCalldata_);
+    }
+
+    function test_beforeHook_acceptsValidAllbridgeSwapQuote() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildAllbridgeCalldata(SOLANA_RECIPIENT, SOLANA_MINT, LIFI_CHAIN_ID_SOLANA, true);
+        _runRoutedBeforeHook(terms_, quote_, LiFiSwapQuoteLib.RouteKind.AllbridgeNonEvm, bridgeCalldata_);
+    }
+
+    function test_beforeHook_acceptsValidAllbridgeStartQuote() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildAllbridgeCalldata(SOLANA_RECIPIENT, SOLANA_MINT, LIFI_CHAIN_ID_SOLANA, false);
+        _runRoutedBeforeHook(terms_, quote_, LiFiSwapQuoteLib.RouteKind.AllbridgeNonEvm, bridgeCalldata_);
+    }
+
+    function test_revert_mayan_recipientMismatch() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes32 otherRecipient_ = bytes32(uint256(SOLANA_RECIPIENT) ^ 1);
+        bytes memory bridgeCalldata_ = _buildMayanCalldata(otherRecipient_, alice, LIFI_CHAIN_ID_SOLANA, true);
+        _runRoutedBeforeHookRevert(
+            terms_, quote_, LiFiSwapQuoteLib.RouteKind.MayanNonEvm, bridgeCalldata_, "LiFiSwapEnforcer:calldata-recipient-mismatch"
+        );
+    }
+
+    function test_revert_mayan_destChainMismatch() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildMayanCalldata(SOLANA_RECIPIENT, alice, LIFI_CHAIN_ID_SOLANA + 1, true);
+        _runRoutedBeforeHookRevert(
+            terms_, quote_, LiFiSwapQuoteLib.RouteKind.MayanNonEvm, bridgeCalldata_, "LiFiSwapEnforcer:calldata-dest-chain-mismatch"
+        );
+    }
+
+    function test_revert_mayan_refundRecipientMismatch() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildMayanCalldata(SOLANA_RECIPIENT, bob, LIFI_CHAIN_ID_SOLANA, true);
+        _runRoutedBeforeHookRevert(
+            terms_,
+            quote_,
+            LiFiSwapQuoteLib.RouteKind.MayanNonEvm,
+            bridgeCalldata_,
+            "LiFiSwapEnforcer:mayan-refund-recipient-mismatch"
+        );
+    }
+
+    function test_revert_mayan_wrongSelector() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildAllbridgeCalldata(SOLANA_RECIPIENT, SOLANA_MINT, LIFI_CHAIN_ID_SOLANA, true);
+        _runRoutedBeforeHookRevert(
+            terms_, quote_, LiFiSwapQuoteLib.RouteKind.MayanNonEvm, bridgeCalldata_, "LiFiSwapEnforcer:route-selector-mismatch"
+        );
+    }
+
+    function test_revert_allbridge_receiveTokenMismatch() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes32 otherMint_ = bytes32(uint256(SOLANA_MINT) ^ 1);
+        bytes memory bridgeCalldata_ = _buildAllbridgeCalldata(SOLANA_RECIPIENT, otherMint_, LIFI_CHAIN_ID_SOLANA, false);
+        _runRoutedBeforeHookRevert(
+            terms_,
+            quote_,
+            LiFiSwapQuoteLib.RouteKind.AllbridgeNonEvm,
+            bridgeCalldata_,
+            "LiFiSwapEnforcer:allbridge-receive-token-mismatch"
+        );
+    }
+
+    function test_revert_lyingEnum_mayanCalldataWithNearBtcRoute() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildMayanCalldata(SOLANA_RECIPIENT, alice, LIFI_CHAIN_ID_SOLANA, true);
+        _runRoutedBeforeHookRevert(
+            terms_, quote_, LiFiSwapQuoteLib.RouteKind.NearBtc, bridgeCalldata_, "LiFiSwapEnforcer:route-selector-mismatch"
+        );
+    }
+
+    function test_revert_lyingEnum_mayanCalldataWithEvmBridgeRoute() public {
+        // Terms pin a clean EVM recipient so the EVM shape check passes, then the sentinel receiver reverts.
+        bytes32 evmRecipient_ = bytes32(uint256(uint160(alice)));
+        LiFiSwapQuoteLib.Terms memory terms_ = _buildTerms(LIFI_CHAIN_ID_SOLANA);
+        terms_.outputRecipient = evmRecipient_;
+        terms_.outputAssetId = SOLANA_MINT;
+        LiFiSwapQuoteLib.SignedLiFiQuote memory quote_ = _buildQuote(LIFI_CHAIN_ID_SOLANA);
+        quote_.outputRecipient = evmRecipient_;
+        quote_.outputAssetId = SOLANA_MINT;
+
+        bytes memory bridgeCalldata_ = _buildMayanCalldata(SOLANA_RECIPIENT, alice, LIFI_CHAIN_ID_SOLANA, true);
+        _runRoutedBeforeHookRevert(
+            terms_, quote_, LiFiSwapQuoteLib.RouteKind.EvmBridge, bridgeCalldata_, "LiFiSwapEnforcer:non-evm-sentinel-receiver"
+        );
+    }
+
+    ////////////////////// hasSourceSwaps must match the selector //////////////////////
+
+    function test_revert_mayanSwap_hasSourceSwapsFalse() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildMayanCalldataFlag(SOLANA_RECIPIENT, true, false);
+        _runRoutedBeforeHookRevert(
+            terms_, quote_, LiFiSwapQuoteLib.RouteKind.MayanNonEvm, bridgeCalldata_, "LiFiSwapEnforcer:source-swaps-mismatch"
+        );
+    }
+
+    function test_revert_mayanStart_hasSourceSwapsTrue() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildMayanCalldataFlag(SOLANA_RECIPIENT, false, true);
+        _runRoutedBeforeHookRevert(
+            terms_, quote_, LiFiSwapQuoteLib.RouteKind.MayanNonEvm, bridgeCalldata_, "LiFiSwapEnforcer:source-swaps-mismatch"
+        );
+    }
+
+    function test_revert_allbridgeSwap_hasSourceSwapsFalse() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildAllbridgeCalldataFlag(SOLANA_RECIPIENT, SOLANA_MINT, true, false);
+        _runRoutedBeforeHookRevert(
+            terms_, quote_, LiFiSwapQuoteLib.RouteKind.AllbridgeNonEvm, bridgeCalldata_, "LiFiSwapEnforcer:source-swaps-mismatch"
+        );
+    }
+
+    function test_revert_allbridgeStart_hasSourceSwapsTrue() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildAllbridgeCalldataFlag(SOLANA_RECIPIENT, SOLANA_MINT, false, true);
+        _runRoutedBeforeHookRevert(
+            terms_, quote_, LiFiSwapQuoteLib.RouteKind.AllbridgeNonEvm, bridgeCalldata_, "LiFiSwapEnforcer:source-swaps-mismatch"
+        );
+    }
+
+    function test_revert_nearSwap_hasSourceSwapsFalse() public {
+        bytes32 btcRecipient_ = 0x050c01161e111701130c030c1a1b0d10060310180f1d100f110418040e12030f;
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) = _btcTermsAndQuote(btcRecipient_);
+        bytes memory bridgeCalldata_ = _buildNearSwapCalldataFlag(btcRecipient_, false);
+        _runRoutedBeforeHookRevert(
+            terms_, quote_, LiFiSwapQuoteLib.RouteKind.NearBtc, bridgeCalldata_, "LiFiSwapEnforcer:source-swaps-mismatch"
         );
     }
 
@@ -283,8 +444,7 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
         (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) = _btcTermsAndQuote(btcRecipient_);
         bytes memory bridgeCalldata_ = _buildLayerSwapBtcCalldata(btcRecipient_);
         bytes memory execData_ = _encodeSingleExecution(address(mockDiamond), 0, bridgeCalldata_);
-        bytes memory args_ =
-            _encodeArgsWithRoute(LiFiSwapQuoteLib.RouteKind.NearBtc, quote_, bridgeCalldata_, dummyDelegationHash);
+        bytes memory args_ = _encodeArgsWithRoute(LiFiSwapQuoteLib.RouteKind.NearBtc, quote_, bridgeCalldata_, dummyDelegationHash);
 
         vm.prank(address(delegationManager));
         vm.expectRevert("LiFiSwapEnforcer:route-selector-mismatch");
@@ -351,9 +511,7 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
         // Build args directly (not via _encodeArgs, which would overwrite the tampered hash) but still
         // prepend the RouteKind so _decodeArgs succeeds.
         bytes memory args_ = abi.encode(
-            LiFiSwapQuoteLib.RouteKind.SameChain,
-            quote_,
-            _signQuote(quoteSignerPrivateKey, quote_, dummyDelegationHash)
+            LiFiSwapQuoteLib.RouteKind.SameChain, quote_, _signQuote(quoteSignerPrivateKey, quote_, dummyDelegationHash)
         );
 
         vm.prank(address(delegationManager));
@@ -433,13 +591,25 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
 
         vm.prank(address(delegationManager));
         lifiSwapEnforcer.beforeHook(
-            encodedTerms_, _encodeArgs(quote_, callData_, delegationHash_), singleDefaultMode, execData_, delegationHash_, alice, redeemer
+            encodedTerms_,
+            _encodeArgs(quote_, callData_, delegationHash_),
+            singleDefaultMode,
+            execData_,
+            delegationHash_,
+            alice,
+            redeemer
         );
 
         vm.prank(address(delegationManager));
         vm.expectRevert("LiFiSwapEnforcer:period-amount-exceeded");
         lifiSwapEnforcer.beforeHook(
-            encodedTerms_, _encodeArgs(quote_, callData_, delegationHash_), singleDefaultMode, execData_, delegationHash_, alice, redeemer
+            encodedTerms_,
+            _encodeArgs(quote_, callData_, delegationHash_),
+            singleDefaultMode,
+            execData_,
+            delegationHash_,
+            alice,
+            redeemer
         );
     }
 
@@ -648,7 +818,7 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
         // Simulate the actual swap (delegation manager would execute this with msg.value)
         uint256 aliceWbtcBefore_ = wbtc.balanceOf(alice);
         vm.prank(alice);
-        mockDiamond.swapTokensSingleV3NativeToERC20{value: inputAmount}(
+        mockDiamond.swapTokensSingleV3NativeToERC20{ value: inputAmount }(
             bytes32(uint256(1)), "", "", payable(alice), minAmountOut, swapData_
         );
         assertEq(wbtc.balanceOf(alice), aliceWbtcBefore_ + minAmountOut, "alice should receive wbtc");
@@ -741,12 +911,7 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
         caveats_[0] = Caveat({ args: hex"", enforcer: address(lifiSwapEnforcer), terms: termsBytes_ });
 
         Delegation memory delegation_ = Delegation({
-            delegate: bob,
-            delegator: alice,
-            authority: ROOT_AUTHORITY,
-            caveats: caveats_,
-            salt: 0,
-            signature: hex""
+            delegate: bob, delegator: alice, authority: ROOT_AUTHORITY, caveats: caveats_, salt: 0, signature: hex""
         });
         bytes32 delegationHash_ = EncoderLib._getDelegationHash(delegation_);
         caveats_[0].args = _encodeArgs(quote_, swapCalldata_, delegationHash_);
@@ -827,6 +992,10 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
 
     bytes4 private constant SEL_NEAR_SWAP = 0x3110c7b9;
     bytes4 private constant SEL_LAYERSWAP_SWAP = 0x4c279d6b;
+    bytes4 private constant SEL_MAYAN_START = 0xb4875292;
+    bytes4 private constant SEL_MAYAN_SWAP = 0x80c65808;
+    bytes4 private constant SEL_ALLBRIDGE_START = 0x6a51e9a9;
+    bytes4 private constant SEL_ALLBRIDGE_SWAP = 0x63267469;
     bytes4 private constant SEL_EVM_BRIDGE_FAKE = 0x12345678; // EvmBridge path is selector-agnostic
 
     struct BridgeDataMirror {
@@ -871,7 +1040,34 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
         uint256 deadline;
     }
 
-    function _bridgeData(address _receiver, uint256 _destChainId, bool _hasSourceSwaps)
+    /// @dev Mirrors lifinance `MayanData`. `refundRecipient` is the static address at head +0xE0.
+    struct MayanDataMirror {
+        bytes32 nonEVMReceiver;
+        address mayanProtocol;
+        bytes protocolData;
+        address swapProtocol;
+        bytes swapData;
+        address middleToken;
+        uint256 minMiddleAmount;
+        address refundRecipient;
+        uint256 mayanAmountIn;
+    }
+
+    /// @dev Mirrors lifinance `AllBridgeData`. `receiveToken` is the static bytes32 at head +0x40.
+    struct AllBridgeDataMirror {
+        bytes32 recipient;
+        uint256 fees;
+        bytes32 receiveToken;
+        uint256 nonce;
+        uint8 messenger;
+        bool payFeeWithSendingAsset;
+    }
+
+    function _bridgeData(
+        address _receiver,
+        uint256 _destChainId,
+        bool _hasSourceSwaps
+    )
         internal
         view
         returns (BridgeDataMirror memory)
@@ -915,7 +1111,9 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
             refundRecipient: alice,
             signature: hex""
         });
-        return abi.encodeWithSelector(SEL_NEAR_SWAP, _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, LIFI_CHAIN_ID_BTC, true), swaps_, near_);
+        return abi.encodeWithSelector(
+            SEL_NEAR_SWAP, _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, LIFI_CHAIN_ID_BTC, true), swaps_, near_
+        );
     }
 
     /// @dev LayerSwap swap+bridge calldata (hasSourceSwaps=true). nonEVMReceiver is the 4th struct field.
@@ -932,6 +1130,179 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
         });
         return abi.encodeWithSelector(
             SEL_LAYERSWAP_SWAP, _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, LIFI_CHAIN_ID_BTC, true), swaps_, ls_
+        );
+    }
+
+    function _mayanData(bytes32 _recipient, address _refundRecipient) internal view returns (MayanDataMirror memory) {
+        return MayanDataMirror({
+            nonEVMReceiver: _recipient,
+            mayanProtocol: address(0xCAFE),
+            protocolData: hex"01",
+            swapProtocol: address(0),
+            swapData: hex"",
+            middleToken: address(0),
+            minMiddleAmount: 0,
+            refundRecipient: _refundRecipient,
+            mayanAmountIn: inputAmount
+        });
+    }
+
+    /// @dev Mayan start (no source swaps) or swap+bridge. Recipient is the first `MayanData` word.
+    function _buildMayanCalldata(
+        bytes32 _recipient,
+        address _refundRecipient,
+        uint256 _destChainId,
+        bool _hasSourceSwaps
+    )
+        internal
+        view
+        returns (bytes memory)
+    {
+        MayanDataMirror memory mayan_ = _mayanData(_recipient, _refundRecipient);
+        if (_hasSourceSwaps) {
+            SwapDataMirror[] memory swaps_ = new SwapDataMirror[](1);
+            swaps_[0] = _sourceSwap();
+            return abi.encodeWithSelector(
+                SEL_MAYAN_SWAP, _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, _destChainId, true), swaps_, mayan_
+            );
+        }
+        return abi.encodeWithSelector(SEL_MAYAN_START, _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, _destChainId, false), mayan_);
+    }
+
+    /// @dev Allbridge start (no source swaps) or swap+bridge. Recipient is the first `AllBridgeData` word.
+    function _buildAllbridgeCalldata(
+        bytes32 _recipient,
+        bytes32 _receiveToken,
+        uint256 _destChainId,
+        bool _hasSourceSwaps
+    )
+        internal
+        view
+        returns (bytes memory)
+    {
+        AllBridgeDataMirror memory allbridge_ = AllBridgeDataMirror({
+            recipient: _recipient, fees: 1, receiveToken: _receiveToken, nonce: 7, messenger: 1, payFeeWithSendingAsset: false
+        });
+        if (_hasSourceSwaps) {
+            SwapDataMirror[] memory swaps_ = new SwapDataMirror[](1);
+            swaps_[0] = _sourceSwap();
+            return abi.encodeWithSelector(
+                SEL_ALLBRIDGE_SWAP, _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, _destChainId, true), swaps_, allbridge_
+            );
+        }
+        return abi.encodeWithSelector(
+            SEL_ALLBRIDGE_START, _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, _destChainId, false), allbridge_
+        );
+    }
+
+    /// @dev Encodes a Mayan call whose selector shape and `hasSourceSwaps` flag are chosen independently.
+    function _buildMayanCalldataFlag(
+        bytes32 _recipient,
+        bool _useSwapSelector,
+        bool _hasSourceSwaps
+    )
+        internal
+        view
+        returns (bytes memory)
+    {
+        MayanDataMirror memory mayan_ = _mayanData(_recipient, alice);
+        BridgeDataMirror memory bridge_ = _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, LIFI_CHAIN_ID_SOLANA, _hasSourceSwaps);
+        if (_useSwapSelector) {
+            SwapDataMirror[] memory swaps_ = new SwapDataMirror[](1);
+            swaps_[0] = _sourceSwap();
+            return abi.encodeWithSelector(SEL_MAYAN_SWAP, bridge_, swaps_, mayan_);
+        }
+        return abi.encodeWithSelector(SEL_MAYAN_START, bridge_, mayan_);
+    }
+
+    /// @dev Encodes an Allbridge call whose selector shape and `hasSourceSwaps` flag are chosen independently.
+    function _buildAllbridgeCalldataFlag(
+        bytes32 _recipient,
+        bytes32 _receiveToken,
+        bool _useSwapSelector,
+        bool _hasSourceSwaps
+    )
+        internal
+        view
+        returns (bytes memory)
+    {
+        AllBridgeDataMirror memory allbridge_ = AllBridgeDataMirror({
+            recipient: _recipient, fees: 1, receiveToken: _receiveToken, nonce: 7, messenger: 1, payFeeWithSendingAsset: false
+        });
+        BridgeDataMirror memory bridge_ = _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, LIFI_CHAIN_ID_SOLANA, _hasSourceSwaps);
+        if (_useSwapSelector) {
+            SwapDataMirror[] memory swaps_ = new SwapDataMirror[](1);
+            swaps_[0] = _sourceSwap();
+            return abi.encodeWithSelector(SEL_ALLBRIDGE_SWAP, bridge_, swaps_, allbridge_);
+        }
+        return abi.encodeWithSelector(SEL_ALLBRIDGE_START, bridge_, allbridge_);
+    }
+
+    /// @dev NEAR `swapAndStart` calldata with an explicit `hasSourceSwaps` flag.
+    function _buildNearSwapCalldataFlag(bytes32 _btcRecipient, bool _hasSourceSwaps) internal view returns (bytes memory) {
+        SwapDataMirror[] memory swaps_ = new SwapDataMirror[](1);
+        swaps_[0] = _sourceSwap();
+        NearIntentsDataMirror memory near_ = NearIntentsDataMirror({
+            nonEVMReceiver: _btcRecipient,
+            depositAddress: address(0xBEEF),
+            quoteId: bytes32(uint256(2)),
+            deadline: block.timestamp + 1 hours,
+            minAmountOut: minAmountOut,
+            refundRecipient: alice,
+            signature: hex""
+        });
+        return abi.encodeWithSelector(
+            SEL_NEAR_SWAP, _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, LIFI_CHAIN_ID_BTC, _hasSourceSwaps), swaps_, near_
+        );
+    }
+
+    function _solanaTermsAndQuote(
+        bytes32 _recipient,
+        bytes32 _assetId
+    )
+        internal
+        view
+        returns (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_)
+    {
+        terms_ = _buildTerms(LIFI_CHAIN_ID_SOLANA);
+        terms_.outputRecipient = _recipient;
+        terms_.outputAssetId = _assetId;
+        quote_ = _buildQuote(LIFI_CHAIN_ID_SOLANA);
+        quote_.outputRecipient = _recipient;
+        quote_.outputAssetId = _assetId;
+    }
+
+    function _runRoutedBeforeHook(
+        LiFiSwapQuoteLib.Terms memory _terms,
+        LiFiSwapQuoteLib.SignedLiFiQuote memory _quote,
+        LiFiSwapQuoteLib.RouteKind _routeKind,
+        bytes memory _callData
+    )
+        internal
+    {
+        bytes memory execData_ = _encodeSingleExecution(address(mockDiamond), 0, _callData);
+        bytes memory args_ = _encodeArgsWithRoute(_routeKind, _quote, _callData, dummyDelegationHash);
+        vm.prank(address(delegationManager));
+        lifiSwapEnforcer.beforeHook(
+            LiFiSwapQuoteLib.encodeTerms(_terms), args_, singleDefaultMode, execData_, dummyDelegationHash, alice, redeemer
+        );
+    }
+
+    function _runRoutedBeforeHookRevert(
+        LiFiSwapQuoteLib.Terms memory _terms,
+        LiFiSwapQuoteLib.SignedLiFiQuote memory _quote,
+        LiFiSwapQuoteLib.RouteKind _routeKind,
+        bytes memory _callData,
+        string memory _revert
+    )
+        internal
+    {
+        bytes memory execData_ = _encodeSingleExecution(address(mockDiamond), 0, _callData);
+        bytes memory args_ = _encodeArgsWithRoute(_routeKind, _quote, _callData, dummyDelegationHash);
+        vm.prank(address(delegationManager));
+        vm.expectRevert(bytes(_revert));
+        lifiSwapEnforcer.beforeHook(
+            LiFiSwapQuoteLib.encodeTerms(_terms), args_, singleDefaultMode, execData_, dummyDelegationHash, alice, redeemer
         );
     }
 
@@ -982,11 +1353,7 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
     /// @dev Mirrors the CLI derive-from-quote helper: same-chain vs EVM cross-chain vs non-EVM (BTC).
     /// Non-EVM recipients require an explicit route (Near/LayerSwap) since the bridge cannot be derived
     /// from the quote alone — callers must use `_encodeArgsWithRoute` for those.
-    function _deriveRouteKind(LiFiSwapQuoteLib.SignedLiFiQuote memory _quote)
-        internal
-        view
-        returns (LiFiSwapQuoteLib.RouteKind)
-    {
+    function _deriveRouteKind(LiFiSwapQuoteLib.SignedLiFiQuote memory _quote) internal view returns (LiFiSwapQuoteLib.RouteKind) {
         if (_quote.destinationChainId == block.chainid) {
             return LiFiSwapQuoteLib.RouteKind.SameChain;
         }
@@ -1005,17 +1372,12 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
         view
         returns (bytes memory)
     {
-        bytes32 ethSignedMessageHash_ =
-            MessageHashUtils.toEthSignedMessageHash(LiFiSwapQuoteLib.hashQuote(_quote, _delegationHash));
+        bytes32 ethSignedMessageHash_ = MessageHashUtils.toEthSignedMessageHash(LiFiSwapQuoteLib.hashQuote(_quote, _delegationHash));
         (uint8 v_, bytes32 r_, bytes32 s_) = vm.sign(_privateKey, ethSignedMessageHash_);
         return abi.encodePacked(r_, s_, v_);
     }
 
-    function _encodeSingleExecution(address _target, uint256 _value, bytes memory _callData)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function _encodeSingleExecution(address _target, uint256 _value, bytes memory _callData) internal pure returns (bytes memory) {
         return ExecutionLib.encodeSingle(_target, _value, _callData);
     }
 
@@ -1027,9 +1389,7 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
         internal
     {
         _runBeforeHookWithExecution(
-            LiFiSwapQuoteLib.encodeTerms(_terms),
-            _quote,
-            _encodeSingleExecution(address(mockDiamond), 0, _callData)
+            LiFiSwapQuoteLib.encodeTerms(_terms), _quote, _encodeSingleExecution(address(mockDiamond), 0, _callData)
         );
     }
 

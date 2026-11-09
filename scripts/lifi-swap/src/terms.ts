@@ -2,6 +2,7 @@ import { encodePacked, keccak256, padHex, stringToBytes, toHex, type Address, ty
 
 import { encodeLiFiBitcoinBytes32, isBitcoinAddress } from "./bitcoinEncoding.js";
 import { TERMS_LENGTH } from "./constants.js";
+import { tryEncodeSolanaBytes32 } from "./solanaEncoding.js";
 import type { LiFiTermsRecord } from "./types.js";
 
 export function addressToBytes32(address: Address): Hex {
@@ -13,6 +14,10 @@ export function encodeLiFiNonEvmBytes32(value: string): Hex {
   if (isBitcoinAddress(value)) {
     return encodeLiFiBitcoinBytes32(value);
   }
+  // Solana pubkeys and SPL mints are raw 32-byte base58 payloads. Check this before the
+  // long-string keccak fallback so a 32–44 character address is not hashed.
+  const solanaBytes32 = tryEncodeSolanaBytes32(value);
+  if (solanaBytes32) return solanaBytes32;
   const bytes = stringToBytes(value);
   if (bytes.length > 32) {
     return keccak256(bytes);
