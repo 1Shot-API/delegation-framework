@@ -1,4 +1,4 @@
-import { parseArgs } from "../config.js";
+import { parseArgs, rpcUrlForChainId } from "../config.js";
 import {
   createSmartAccountContext,
   readAvailableBudget,
@@ -18,7 +18,11 @@ export async function runShowCommand(argv: string[]): Promise<void> {
   const { savedExecutionChainId } = await import("../executionChain.js");
   const cli = loadCliConfig();
   const executionChainId = savedExecutionChainId(saved);
-  const ctx = await createSmartAccountContext(cli.privateKey, cli.rpcUrl, executionChainId);
+  const ctx = await createSmartAccountContext(
+    cli.privateKey,
+    rpcUrlForChainId(executionChainId),
+    executionChainId,
+  );
 
   if (ctx.account.address.toLowerCase() !== saved.terms.quoteSigner.toLowerCase()) {
     throw new Error("PRIVATE_KEY does not match saved quoteSigner");

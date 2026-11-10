@@ -6,7 +6,12 @@
 #################################
 # Default Chains to Iterate Over
 #################################
-CHAIN_IDS=(
+# Override with VERIFY_CHAIN_IDS=(5042) for a single-chain run (e.g. Arc verify script).
+if [[ -n "${VERIFY_CHAIN_IDS:-}" ]]; then
+  # shellcheck disable=SC2206
+  CHAIN_IDS=(${VERIFY_CHAIN_IDS})
+else
+  CHAIN_IDS=(
   1          # ethereum
   11155111   # sepolia
   560048     # hoodi
@@ -55,9 +60,11 @@ CHAIN_IDS=(
   1155       # intuition
   46630      # robinhood testnet
   4663       # robinhood
+  5042       # arc mainnet
   5042002    # arc testnet
   1243       # arc
 )
+fi
 
 ##########################################
 # FUNCTION: get_chain_config(chain_id)
@@ -119,8 +126,9 @@ get_chain_config() {
         1155)     config=("key" "blockscout" "$INTUITION_RPC_URL" "https://intuition.calderaexplorer.xyz/api/") ;; # intuition
         46630) config=("key" "blockscout" "$ROBINHOOD_TESTNET_RPC_URL" "https://explorer.testnet.chain.robinhood.com/api/") ;; # robinhood testnet
         4663) config=("key" "blockscout" "$ROBINHOOD_RPC_URL" "https://robinhoodchain.blockscout.com/api/") ;; # robinhood
+        5042)    config=("$BLOCKSCOUT_API_KEY" "blockscout" "$ARC_RPC_URL" "https://api.blockscout.com/v2/api?chain_id=5042&apikey=${BLOCKSCOUT_API_KEY}") ;; # arc mainnet (Blockscout PRO; embed apikey in URL for Forge)
         5042002) config=("key" "blockscout" "$ARC_TESTNET_RPC_URL" "https://testnet.arcscan.app/api/") ;; # arc testnet
-        1243) config=("key" "blockscout" "$ARC_RPC_URL" "https://explorer.arc.io/api/") ;; # arc
+        1243) config=("key" "blockscout" "$ARC_RPC_URL" "https://explorer.arc.io/api/") ;; # arc (legacy chain id)
         *)
             echo "Unknown chain ID: $chain_id" >&2
             return 1
@@ -168,26 +176,30 @@ verify_across_chains() {
       local cmd=(
         forge verify-contract
         --num-of-optimizations 200
+        --skip-is-verified-check
       )
 
-       # Only add if verifier is not custom, the custom verifier is simpler
-      if [[ "$verifier" != "custom" ]]; then
+      if [[ "$verifier" == "custom" ]]; then
+        if [[ "$api_key" != "key" ]]; then
+          cmd+=( --etherscan-api-key "$api_key" )
+        fi
+        cmd+=( --verifier-url "$verifier_url" )
+      else
         cmd+=( --rpc-url "$rpc_url" )
         cmd+=( --chain-id "$chain_id" )
         cmd+=( --verifier "$verifier" )
+        if { [[ "$verifier" == "etherscan" ]] || [[ "$verifier" == "blockscout" ]]; } && [[ "$api_key" != "key" ]]; then
+          cmd+=( --etherscan-api-key "$api_key" )
+        fi
+        if [[ "$verifier" == "blockscout" ]] || [[ "$verifier" == "sourcify" ]]; then
+          cmd+=( --verifier-url "$verifier_url" )
+        fi
       fi
 
-      # Only add etherscan-api-key if verifier is etherscan or custom
-      if { [[ "$verifier" == "etherscan" ]] || [[ "$verifier" == "custom" ]]; } && [[ "$api_key" != "key" ]]; then
-        cmd+=( --etherscan-api-key "$api_key" )
+      if [[ "${VERIFY_SKIP_WATCH:-}" != "1" ]]; then
+        cmd+=( --watch )
       fi
-
-      # Only add verifier-url if verifier is blockscout or custom
-      if [[ "$verifier" == "blockscout" ]] || [[ "$verifier" == "custom" ]] || [[ "$verifier" == "sourcify" ]]; then
-        cmd+=( --verifier-url "$verifier_url" )
-      fi
-
-      cmd+=( --watch "$contract_address" "$contract_file:$contract_name" )
+      cmd+=( "$contract_address" "$contract_file:$contract_name" )
 
       # If we have constructor args
       if [[ -n "$constructor_args" ]]; then
@@ -200,7 +212,10 @@ verify_across_chains() {
       fi
 
       echo "Running: ${cmd[*]}"
-      "${cmd[@]}"
+      if ! "${cmd[@]}"; then
+        echo "Verification FAILED for $contract_name on chain $chain_id" >&2
+        return 1
+      fi
 
       echo "Verification of $contract_name on chain $chain_id completed."
       echo

@@ -9,6 +9,7 @@ import {
   loadCliConfig,
   parseArgs,
   parseChainlinkCreateFlags,
+  rpcUrlForChainId,
 } from "../config.js";
 import {
   createApproveDelegation,
@@ -60,7 +61,11 @@ export async function runCreateChainlinkCommand(argv: string[]): Promise<void> {
     throw new Error(`Delegation "${id}" already exists. Pass --force to overwrite.`);
   }
 
-  const ctx = await createSmartAccountContext(cli.privateKey, cli.rpcUrl, route.fromChainId);
+  const ctx = await createSmartAccountContext(
+    cli.privateKey,
+    rpcUrlForChainId(route.fromChainId),
+    route.fromChainId,
+  );
   const chainCaps = await getChainCapabilities(route.fromChainId, cli.relayerUrl);
 
   const outputRecipient = resolveOutputRecipient(

@@ -14,6 +14,12 @@ export enum RouteKind {
   EvmBridge = 1,
   NearBtc = 2,
   LayerSwapBtc = 3,
+  /** Mayan non-EVM (Solana and others). `nonEVMReceiver` is the first struct word. */
+  MayanNonEvm = 4,
+  /** Allbridge non-EVM. `recipient` is the first struct word; `receiveToken` is at +0x40. */
+  AllbridgeNonEvm = 5,
+  /** LiFi Intent Escrow V2. `recipient` is the second struct word; `outputToken` is at +0x120. */
+  LiFiIntentsNonEvm = 6,
 }
 
 export type ChainlinkTermsRecord = {

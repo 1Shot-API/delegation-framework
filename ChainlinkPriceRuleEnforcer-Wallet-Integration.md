@@ -50,7 +50,7 @@ Reference deployments (v1.3.0): see [`documents/Deployments.md`](documents/Deplo
 |---|---|
 | `DelegationManager` | `0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3` — validates delegations; calls enforcer hooks |
 | User `DeleGator` | Smart account that holds assets and executes swaps |
-| `ChainlinkPriceRuleEnforcer` | `0x4dAEbF9C5813EFF2606acD41BA25e57841e7cb75` (Base mainnet; CREATE2 with salt `GATOR`) |
+| `ChainlinkPriceRuleEnforcer` | `0x4dAEbF9C5813EFF2606acD41BA25e57841e7cb75` (Base, Ethereum, and Arc; CREATE2 with salt `GATOR`) |
 | `LiFiSwapEnforcer` | `0x64a9B2277dcDD134e78d30bEe11c3056e8E56ffE` — budget, slippage, signed quote |
 | `AllowedTargetsEnforcer` | `0x7F20f61b1f09b08D970938F6fa563634d65c4EeB` — pin LiFi diamond |
 | `ValueLteEnforcer` | `0x92Bf12322527cAA612fd31a0e810472BBB106A8F` — disallow ETH in execution |
@@ -318,7 +318,7 @@ Full reference: [`documents/CaveatEnforcers.md` § ChainlinkPriceRuleEnforcer](d
 
 ## Wallet checklist
 
-- [ ] Reference `ChainlinkPriceRuleEnforcer` on target chains (Base deployed; others via CREATE2 deploy script)
+- [ ] Reference `ChainlinkPriceRuleEnforcer` at `0x4dAEbF9C5813EFF2606acD41BA25e57841e7cb75` on Base, Ethereum, and Arc
 - [ ] Map EIP-7715 permission request → 68-byte Chainlink terms
 - [ ] Verify `priceFeed` against Chainlink feeds list; set `expectedDecimals` from on-chain `decimals()`
 - [ ] Set Chainlink caveat `args` to empty at grant time

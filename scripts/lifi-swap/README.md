@@ -5,7 +5,7 @@ Staged CLI for **LiFiSwapEnforcer** delegations on Base mainnet: create a signed
 ## Prerequisites
 
 - Node.js 20+ with `npm install`
-- Copy [`.env.example`](./.env.example) to `.env` in this directory and set `PRIVATE_KEY` and `BASE_RPC_URL` (RPC must match the `--input-chain` you use on create)
+- Copy [`.env.example`](./.env.example) to `.env` in this directory and set `PRIVATE_KEY` plus one RPC per chain you use (`BASE_RPC_URL`, `ARC_RPC_URL`, `ETHEREUM_RPC_URL`). Create, approve, and execute select the URL from the chain id.
 - Base ETH for gas (via relayer fee token) and input ERC-20 balance (e.g. USDC)
 - Deployed contracts on Base:
   - `DelegationManager`: `0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3`
@@ -18,7 +18,7 @@ Staged CLI for **LiFiSwapEnforcer** delegations on Base mainnet: create a signed
 cd scripts/lifi-swap
 npm install
 cp .env.example .env
-# edit .env — set PRIVATE_KEY and BASE_RPC_URL (full URL with provider key)
+# edit .env — set PRIVATE_KEY and the RPC for each chain (BASE_RPC_URL, ARC_RPC_URL, ETHEREUM_RPC_URL)
 ```
 
 ## LiFi API discovery
@@ -42,7 +42,17 @@ npm run lifi -- tools --chains base,eth
 # Possible routes between chains
 npm run lifi -- connections --from-chain Base --to-chain Bitcoin --from-token USDC
 
+# Arc mainnet quote (uses LIFI_QUOTE_*_CHAIN and PRIVATE_KEY from .env)
+npm run quote:arc -- --amount 1000000
+
 # Quote with human-readable chain/token names (amount in token atoms)
+npm run lifi -- quote \
+  --input-chain Arc \
+  --input-token USDC \
+  --output-chain Arc \
+  --output-token EURC \
+  --amount 1000000
+
 npm run lifi -- quote \
   --input-chain Base \
   --input-token USDC \
@@ -207,11 +217,36 @@ npm run delegation -- create --id usdc-weth-daily --force
 
 `approve` and `execute` use estimate-first submission: mock fee ≥ `minFee` from `relayer_getFeeData`, simulate via `relayer_estimate7710Transaction`, adjust fee from `requiredPaymentAmount` if needed, then send with signed `context`. Use `--dry-run` to see `gasUsed` and `requiredPaymentAmount` without submitting.
 
+## Gas estimate PoC (RPC state override vs relayer)
+
+Experimental command to test **pre-grant gas estimation**: simulate `DelegationManager.redeemDelegations` on your RPC with **bogus delegation signatures** and a **DelegatorEstimateShim** injected at the user delegator via [Geth state overrides](https://geth.ethereum.org/docs/interacting-with-geth/rpc/objects#state-override-set), then compare `eth_estimateGas` to **`relayer_estimate7710Transaction`** (valid signatures, same fee+swap bundle).
+
+```bash
+npm run estimate-gas -- usdc-eth-bridge-2min --amount 1000000
+```
+
+Requires `PRIVATE_KEY`, `BASE_RPC_URL` (must support `stateOverride` on `eth_call` / `eth_estimateGas`), and `RELAYER_URL`. Uses the same LiFi quote + quote-signer flow as `execute`. Overrides are passed as viem’s **`StateOverride` array** (`{ address, code?, stateDiff: [{ slot, value }] }`), not a raw Geth JSON map.
+
+**What it prints**
+
+- **Path A:** relayer `gasUsed` and `requiredPaymentAmount` (valid swap + fee delegations).
+- **Control:** `eth_call` with bogus sig and ERC-20 overrides only → expected signature revert.
+- **Path B:** `eth_call` + `eth_estimateGas` with delegator shim + bogus sig → should succeed.
+- **Comparison:** relayer gas vs RPC gas and delta (%).
+
+Flags: `--skip-control`, `--skip-relayer`, `--skip-rpc`, `--skip-rpc-debug`, `--fee-atoms`, plus the same bridge/chainlink flags as `execute`.
+
+When the full PoC `eth_call` fails, the CLI runs **fee-only** and **swap-only** batch simulations (unless `--skip-rpc-debug`) and decodes revert data (`Error(string)`, `Panic`, delegation-manager / shim custom errors) to pinpoint which leg failed.
+
+**Shim bytecode:** [`src/poc/DelegatorEstimateShim.sol`](../../src/poc/DelegatorEstimateShim.sol). After editing, run `forge build` and `node scripts/lifi-swap/scripts/export-shim-bytecode.mjs` to refresh [`src/poc/delegatorEstimateShimBytecode.ts`](./src/poc/delegatorEstimateShimBytecode.ts). The export script patches the `delegationManager` immutable via Foundry `immutableReferences` (do not global-replace zero addresses in bytecode).
+
+**Caveats:** RPC gas simulates direct `redeemDelegations`; the relayer includes its own submission/wrapper path. The shim’s `executeFromExecutor` is minimal—not byte-identical to `EIP7702StatelessDeleGator`. Use this to measure correlation, not as a production fee API.
+
 ## Chainlink price-gated swaps
 
 Stack [`ChainlinkPriceRuleEnforcer`](../../src/enforcers/ChainlinkPriceRuleEnforcer.sol) with LiFi for buy-the-dip, take-profit, and absolute price triggers. Use a **separate create command** — plain `delegation create` stays LiFi-only.
 
-Deployed on Base mainnet: `0x4dAEbF9C5813EFF2606acD41BA25e57841e7cb75`
+Deployed on Base, Ethereum, and Arc at `0x4dAEbF9C5813EFF2606acD41BA25e57841e7cb75`
 
 ### Env (feed + staleness only)
 
@@ -325,6 +360,27 @@ If you created an EVM bridge delegation before this encoding fix, **recreate wit
 ### Non-EVM (Solana, Bitcoin)
 
 Use route flags plus `--output-address` for the destination recipient (bech32, Solana pubkey, etc.).
+
+**Solana:** `--output-address` must be a 32-byte base58 pubkey. It is not defaulted to the EVM signer. Pubkeys, SPL mints, and native SOL are the raw 32-byte base58 decode, not a hash of the base58 text. Native SOL (`11111…`) encodes to `bytes32(0)`, the same sentinel as native ETH. Create stores that value. Native-token outputs still need real support: the enforcer does not pin a native destination asset in calldata, and the NEAR facet reverts when `destinationAsset` is zero. LayerSwap is the route that can deliver native SOL today; pin it with `--allow-bridges layerswap`.
+
+The unrestricted Base USDC → Solana USDC quote uses tool `lifiIntents` (route kind `LiFiIntentsNonEvm`, 6). Mayan is `MayanNonEvm` (4), Allbridge is `AllbridgeNonEvm` (5), and `near` stays `NearBtc` (2) with the current facet selectors. The Mayan path also requires `refundRecipient` to be the delegator. `lifi quote` will still return a `relay` / `relaydepository` route (often `FASTEST`); `execute` errors on those because the Solana recipient is not in the calldata.
+
+```bash
+npm run lifi -- quote \
+  --input-chain Base \
+  --input-token USDC \
+  --output-chain Solana \
+  --output-token USDC \
+  --output-address HoJQwEF9VZVQREpwACNjMiQEkvZDwWYPHGuAdAHkX6dw \
+  --amount 10000000
+
+npm run delegation -- create \
+  --id usdc-sol-usdc \
+  --input-chain Base --input-token USDC \
+  --output-chain Solana --output-token USDC \
+  --output-address HoJQwEF9VZVQREpwACNjMiQEkvZDwWYPHGuAdAHkX6dw \
+  --period-amount 10000000 --period-duration 120
+```
 
 **Bitcoin (bc1q P2WPKH):** bech32 addresses are encoded to LiFi’s binary `bytes32` (witness program as 5-bit words), **not** keccak256 of the ASCII string. If you created a BTC bridge delegation before this fix, **recreate with `--force`** (e.g. `usdc-btc-bridge-2min`).
 

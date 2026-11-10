@@ -49,7 +49,7 @@ Reference deployments (v1.3.0, same address on most supported chains): see [`doc
 |---|---|
 | `DelegationManager` | Validates delegations; calls enforcer hooks; triggers `executeFromExecutor` on the user's DeleGator |
 | User `DeleGator` (Hybrid / MultiSig / EIP-7702) | Smart account that holds assets and executes LiFi calls |
-| `LiFiSwapEnforcer` | `0x64a9B2277dcDD134e78d30bEe11c3056e8E56ffE` (CREATE2; same address on all deployed chains) |
+| `LiFiSwapEnforcer` | `0x64a9B2277dcDD134e78d30bEe11c3056e8E56ffE` (CREATE2; same address on all deployed chains) — see [`documents/Deployments.md`](documents/Deployments.md) for the canonical address per environment. Note: an upgradeable `TransparentUpgradeableProxy` wrapper is being introduced; new delegations should reference the **proxy** address (logged by `script/DeployLiFiSwapEnforcer.s.sol`), while existing signed delegations keep hitting the non-upgradeable enforcer above. |
 | `AllowedTargetsEnforcer` + `AllowedMethodsEnforcer` | Recommended for the separate **approve onboarding** delegation |
 | LiFi Diamond (source chain) | Swap/bridge entrypoint — address pinned in terms |
 
@@ -150,7 +150,8 @@ The enforcer checks **equality** only; it does not validate address format.
 |---|---|
 | EVM address | `bytes32(uint256(uint160(evmAddress)))` |
 | Native ETH | `bytes32(0)` — the enforcer verifies output via `recipient.balance` in `afterHook` |
-| Solana / Bitcoin / other non-EVM | Use LiFi API `bytes32` representation — must match what the quote signer uses |
+| Bitcoin (bc1q) | LiFi's 5-bit witness-program `bytes32`, not a hash of the text |
+| Solana pubkey or SPL mint | Raw 32-byte base58 decode. A Solana address is 32–44 characters; do not `keccak256` it. The same encoding is `terms.outputAssetId` for the mint. |
 
 For same-chain DCA with on-chain output verification, set:
 
@@ -243,7 +244,9 @@ When the dapp redeems, the enforcer requires:
 - **Mode:** single call + default execution (`ModeLib.encodeSimpleSingle()`)
 - **Target:** `terms.lifiDiamond`
 - **Value:** `0` for ERC20 input, or `inputAmount` when `inputToken == address(0)` (native ETH input)
-- **Calldata:** `keccak256(callData) == quote.calldataHash` (signed by quote signer)
+- **Calldata hash:** `keccak256(callData) == quote.calldataHash` (signed by quote signer)
+- **Calldata shape:** the enforcer decodes the calldata per the `RouteKind` supplied in args and asserts the **recipient** and **destination chain** embedded in the calldata equal `terms.outputRecipient` and `terms.destinationChainId`. The calldata must therefore match terms not only by hash but also by decoded recipient/dest-chain. See the App integration guide's "RouteKind: selecting the decode branch" section for the per-route decode rules.
+- **Args:** must carry a `RouteKind` (0=SameChain, 1=EvmBridge, 2=NearBtc, 3=LayerSwapBtc, 4=MayanNonEvm, 5=AllbridgeNonEvm, 6=LiFiIntentsNonEvm) as the first element of the 3-tuple `(RouteKind, SignedLiFiQuote, signature)`. The wallet sets `args = ""` at grant time; the dapp/quote-signer fills `RouteKind` + quote + signature at redemption. `RouteKind` is not in the delegation hash. Kinds 2 and 4–6 cover Solana (and other non-EVM chains) via NEAR, Mayan, Allbridge, and LiFi Intents. `relay` / `relaydepository` quotes are not redeemable. See the App integration guide for the per-route decode rules, including Mayan's `refundRecipient == delegator` check, Allbridge's `receiveToken` check, and LiFi Intents' `outputToken` and empty `dstCallSwapData` checks.
 - **Period budget:** `quote.inputAmount` consumed from `(delegationManager, delegationHash)` allowance
 - **Slippage:** `quote.minAmountOut >= quote.expectedAmountOut * (10000 - slippageBps) / 10000`
 

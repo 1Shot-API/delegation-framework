@@ -23,10 +23,13 @@ library LiFiSwapQuoteLib {
     /// @dev Provided in `_args` (not signed by the quote signer); cross-checked against the calldata
     ///      selector and `terms` shape before its decode path runs, so a lying enum reverts.
     enum RouteKind {
-        SameChain, // GenericSwap facet, same-chain EVM swap (no BridgeData)
-        EvmBridge, // EVM-to-EVM bridge using ILiFi.BridgeData layout
-        NearBtc, // EVM-to-BTC via NEAR Intents (nonEVMReceiver is 1st struct field)
-        LayerSwapBtc // EVM-to-BTC via LayerSwap (nonEVMReceiver is 4th struct field @ +0x60)
+        SameChain, // 0: GenericSwap facet, same-chain EVM swap (no BridgeData)
+        EvmBridge, // 1: EVM-to-EVM bridge using ILiFi.BridgeData layout
+        NearBtc, // 2: EVM-to-BTC via NEAR Intents (nonEVMReceiver is 1st struct field)
+        LayerSwapBtc, // 3: EVM-to-BTC via LayerSwap (nonEVMReceiver is 4th struct field @ +0x60)
+        MayanNonEvm, // 4: EVM-to-non-EVM via Mayan (nonEVMReceiver is 1st struct field; refundRecipient @ +0xE0)
+        AllbridgeNonEvm, // 5: EVM-to-non-EVM via Allbridge (recipient is 1st struct field; receiveToken @ +0x40)
+        LiFiIntentsNonEvm // 6: EVM-to-non-EVM via LiFi Intent Escrow V2 (recipient is 2nd struct field @ +0x20)
     }
 
     struct Terms {
@@ -116,8 +119,7 @@ library LiFiSwapQuoteLib {
             return false;
         }
 
-        uint256 minimumAllowed_ =
-            Math.mulDiv(_expectedAmountOut, BPS_DENOMINATOR - _slippageBps, BPS_DENOMINATOR);
+        uint256 minimumAllowed_ = Math.mulDiv(_expectedAmountOut, BPS_DENOMINATOR - _slippageBps, BPS_DENOMINATOR);
         return _minAmountOut >= minimumAllowed_;
     }
 

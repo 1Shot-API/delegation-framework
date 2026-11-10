@@ -3,8 +3,11 @@ export const BASE_CHAIN_ID = 8453;
 export const DELEGATION_MANAGER =
   "0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3" as const;
 
+// Upgradeable LiFiSwapEnforcer. New delegations name the proxy. As of the 2026-11-10 upgrade it
+// points at implementation 0x6585DA9cc291EEd428C74CB83C11C665db8d4B52 on Arc, Base, and Ethereum.
+// Delegations signed to that implementation address keep calling it directly.
 export const LIFI_SWAP_ENFORCER =
-  "0xD0e70cd777a527fB798e5EcA8800c5E3588041d4" as const;
+  "0x29fcBBa852439616c4D614A2fa6411E42b760153" as const;
 
 export const CHAINLINK_PRICE_RULE_ENFORCER =
   "0x4dAEbF9C5813EFF2606acD41BA25e57841e7cb75" as const;

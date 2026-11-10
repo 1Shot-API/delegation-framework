@@ -85,9 +85,12 @@ export function deriveRouteKind(quote: LiFiQuoteResponse, executionChainId: numb
   const isNonEvm =
     !!toToken && (!toToken.address.startsWith("0x") || BigInt(toToken.chainId) >= 2_000_000_000_000_00);
   if (isNonEvm) {
-    const tool = quote.tool ?? "";
+    const tool = (quote.tool ?? "").toLowerCase();
     if (tool === "near") return RouteKind.NearBtc;
     if (tool === "layerswap") return RouteKind.LayerSwapBtc;
+    if (tool.startsWith("mayan")) return RouteKind.MayanNonEvm;
+    if (tool === "allbridge") return RouteKind.AllbridgeNonEvm;
+    if (tool === "lifiintents") return RouteKind.LiFiIntentsNonEvm;
     throw new Error(`Unsupported non-EVM bridge for recipient enforcement: ${tool || "(unknown)"}`);
   }
   return RouteKind.EvmBridge;
