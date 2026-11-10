@@ -5,7 +5,7 @@ Staged CLI for **LiFiSwapEnforcer** delegations on Base mainnet: create a signed
 ## Prerequisites
 
 - Node.js 20+ with `npm install`
-- Copy [`.env.example`](./.env.example) to `.env` in this directory and set `PRIVATE_KEY` and `BASE_RPC_URL` (RPC must match the `--input-chain` you use on create)
+- Copy [`.env.example`](./.env.example) to `.env` in this directory and set `PRIVATE_KEY` plus one RPC per chain you use (`BASE_RPC_URL`, `ARC_RPC_URL`, `ETHEREUM_RPC_URL`). Create, approve, and execute select the URL from the chain id.
 - Base ETH for gas (via relayer fee token) and input ERC-20 balance (e.g. USDC)
 - Deployed contracts on Base:
   - `DelegationManager`: `0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3`
@@ -18,7 +18,7 @@ Staged CLI for **LiFiSwapEnforcer** delegations on Base mainnet: create a signed
 cd scripts/lifi-swap
 npm install
 cp .env.example .env
-# edit .env — set PRIVATE_KEY and BASE_RPC_URL (full URL with provider key)
+# edit .env — set PRIVATE_KEY and the RPC for each chain (BASE_RPC_URL, ARC_RPC_URL, ETHEREUM_RPC_URL)
 ```
 
 ## LiFi API discovery
@@ -361,7 +361,26 @@ If you created an EVM bridge delegation before this encoding fix, **recreate wit
 
 Use route flags plus `--output-address` for the destination recipient (bech32, Solana pubkey, etc.).
 
-**Solana:** pubkeys and SPL mints are the raw 32-byte base58 decode, not a hash of the base58 text. Mayan quotes use route kind `MayanNonEvm` (4); Allbridge quotes use `AllbridgeNonEvm` (5). The Mayan path also requires `refundRecipient` to be the delegator.
+**Solana:** `--output-address` must be a 32-byte base58 pubkey. It is not defaulted to the EVM signer. Pubkeys, SPL mints, and native SOL are the raw 32-byte base58 decode, not a hash of the base58 text. Native SOL (`11111…`) encodes to `bytes32(0)`, the same sentinel as native ETH. Create stores that value. Native-token outputs still need real support: the enforcer does not pin a native destination asset in calldata, and the NEAR facet reverts when `destinationAsset` is zero. LayerSwap is the route that can deliver native SOL today; pin it with `--allow-bridges layerswap`.
+
+The unrestricted Base USDC → Solana USDC quote uses tool `lifiIntents` (route kind `LiFiIntentsNonEvm`, 6). Mayan is `MayanNonEvm` (4), Allbridge is `AllbridgeNonEvm` (5), and `near` stays `NearBtc` (2) with the current facet selectors. The Mayan path also requires `refundRecipient` to be the delegator. `lifi quote` will still return a `relay` / `relaydepository` route (often `FASTEST`); `execute` errors on those because the Solana recipient is not in the calldata.
+
+```bash
+npm run lifi -- quote \
+  --input-chain Base \
+  --input-token USDC \
+  --output-chain Solana \
+  --output-token USDC \
+  --output-address HoJQwEF9VZVQREpwACNjMiQEkvZDwWYPHGuAdAHkX6dw \
+  --amount 10000000
+
+npm run delegation -- create \
+  --id usdc-sol-usdc \
+  --input-chain Base --input-token USDC \
+  --output-chain Solana --output-token USDC \
+  --output-address HoJQwEF9VZVQREpwACNjMiQEkvZDwWYPHGuAdAHkX6dw \
+  --period-amount 10000000 --period-duration 120
+```
 
 **Bitcoin (bc1q P2WPKH):** bech32 addresses are encoded to LiFi’s binary `bytes32` (witness program as 5-bit words), **not** keccak256 of the ASCII string. If you created a BTC bridge delegation before this fix, **recreate with `--force`** (e.g. `usdc-btc-bridge-2min`).
 

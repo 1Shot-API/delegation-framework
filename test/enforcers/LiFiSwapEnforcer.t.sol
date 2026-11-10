@@ -310,6 +310,71 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
         );
     }
 
+    function test_beforeHook_acceptsValidLiFiIntentsSwapQuote() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildLiFiIntentsCalldata(SOLANA_RECIPIENT, SOLANA_MINT, true, false);
+        _runRoutedBeforeHook(terms_, quote_, LiFiSwapQuoteLib.RouteKind.LiFiIntentsNonEvm, bridgeCalldata_);
+    }
+
+    function test_beforeHook_acceptsValidLiFiIntentsStartQuote() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildLiFiIntentsCalldata(SOLANA_RECIPIENT, SOLANA_MINT, false, false);
+        _runRoutedBeforeHook(terms_, quote_, LiFiSwapQuoteLib.RouteKind.LiFiIntentsNonEvm, bridgeCalldata_);
+    }
+
+    function test_revert_lifiIntents_recipientMismatch() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes32 otherRecipient_ = bytes32(uint256(SOLANA_RECIPIENT) ^ 1);
+        bytes memory bridgeCalldata_ = _buildLiFiIntentsCalldata(otherRecipient_, SOLANA_MINT, true, false);
+        _runRoutedBeforeHookRevert(
+            terms_,
+            quote_,
+            LiFiSwapQuoteLib.RouteKind.LiFiIntentsNonEvm,
+            bridgeCalldata_,
+            "LiFiSwapEnforcer:calldata-recipient-mismatch"
+        );
+    }
+
+    function test_revert_lifiIntents_outputTokenMismatch() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes32 otherMint_ = bytes32(uint256(SOLANA_MINT) ^ 1);
+        bytes memory bridgeCalldata_ = _buildLiFiIntentsCalldata(SOLANA_RECIPIENT, otherMint_, true, false);
+        _runRoutedBeforeHookRevert(
+            terms_,
+            quote_,
+            LiFiSwapQuoteLib.RouteKind.LiFiIntentsNonEvm,
+            bridgeCalldata_,
+            "LiFiSwapEnforcer:lifi-intents-output-token-mismatch"
+        );
+    }
+
+    function test_revert_lifiIntents_dstCall() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildLiFiIntentsCalldata(SOLANA_RECIPIENT, SOLANA_MINT, true, true);
+        _runRoutedBeforeHookRevert(
+            terms_, quote_, LiFiSwapQuoteLib.RouteKind.LiFiIntentsNonEvm, bridgeCalldata_, "LiFiSwapEnforcer:lifi-intents-dst-call"
+        );
+    }
+
+    function test_beforeHook_acceptsCurrentNearSwapSolanaRecipient() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildNearCurrentCalldata(SOLANA_RECIPIENT, true);
+        _runRoutedBeforeHook(terms_, quote_, LiFiSwapQuoteLib.RouteKind.NearBtc, bridgeCalldata_);
+    }
+
+    function test_beforeHook_acceptsCurrentNearStartSolanaRecipient() public {
+        (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
+            _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
+        bytes memory bridgeCalldata_ = _buildNearCurrentCalldata(SOLANA_RECIPIENT, false);
+        _runRoutedBeforeHook(terms_, quote_, LiFiSwapQuoteLib.RouteKind.NearBtc, bridgeCalldata_);
+    }
+
     function test_revert_allbridge_receiveTokenMismatch() public {
         (LiFiSwapQuoteLib.Terms memory terms_, LiFiSwapQuoteLib.SignedLiFiQuote memory quote_) =
             _solanaTermsAndQuote(SOLANA_RECIPIENT, SOLANA_MINT);
@@ -996,6 +1061,10 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
     bytes4 private constant SEL_MAYAN_SWAP = 0x80c65808;
     bytes4 private constant SEL_ALLBRIDGE_START = 0x6a51e9a9;
     bytes4 private constant SEL_ALLBRIDGE_SWAP = 0x63267469;
+    bytes4 private constant SEL_NEAR_START_CURRENT = 0x4698f032;
+    bytes4 private constant SEL_NEAR_SWAP_CURRENT = 0x02631b09;
+    bytes4 private constant SEL_LIFI_INTENTS_START = 0x7dbcf1d9;
+    bytes4 private constant SEL_LIFI_INTENTS_SWAP = 0x6d21c5df;
     bytes4 private constant SEL_EVM_BRIDGE_FAKE = 0x12345678; // EvmBridge path is selector-agnostic
 
     struct BridgeDataMirror {
@@ -1061,6 +1130,35 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
         uint256 nonce;
         uint8 messenger;
         bool payFeeWithSendingAsset;
+    }
+
+    /// @dev Current `NEARIntentsData`. `destinationAsset` is the second word; word 0 is still the recipient.
+    struct NearIntentsDataCurrentMirror {
+        bytes32 nonEVMReceiver;
+        bytes32 destinationAsset;
+        address depositAddress;
+        bytes32 quoteId;
+        uint256 deadline;
+        uint256 minAmountOut;
+        address refundRecipient;
+        bytes signature;
+    }
+
+    /// @dev Mirrors lifinance `LiFiIntentEscrowDataV2`. `recipient` is head +0x20; `outputToken` is +0x120.
+    struct LiFiIntentEscrowDataMirror {
+        bytes32 dstCallReceiver;
+        bytes32 recipient;
+        address depositAndRefundAddress;
+        uint256 nonce;
+        uint32 expires;
+        uint32 fillDeadline;
+        address inputOracle;
+        bytes32 outputOracle;
+        bytes32 outputSettler;
+        bytes32 outputToken;
+        uint128 outputAmountMultiplier;
+        SwapDataMirror[] dstCallSwapData;
+        bytes outputContext;
     }
 
     function _bridgeData(
@@ -1253,6 +1351,85 @@ contract LiFiSwapEnforcerTest is CaveatEnforcerBaseTest {
         });
         return abi.encodeWithSelector(
             SEL_NEAR_SWAP, _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, LIFI_CHAIN_ID_BTC, _hasSourceSwaps), swaps_, near_
+        );
+    }
+
+    function _buildNearCurrentCalldata(bytes32 _recipient, bool _hasSourceSwaps) internal view returns (bytes memory) {
+        NearIntentsDataCurrentMirror memory near_ = NearIntentsDataCurrentMirror({
+            nonEVMReceiver: _recipient,
+            destinationAsset: SOLANA_MINT,
+            depositAddress: address(0xBEEF),
+            quoteId: bytes32(uint256(2)),
+            deadline: block.timestamp + 1 hours,
+            minAmountOut: minAmountOut,
+            refundRecipient: alice,
+            signature: hex""
+        });
+        if (_hasSourceSwaps) {
+            SwapDataMirror[] memory swaps_ = new SwapDataMirror[](1);
+            swaps_[0] = _sourceSwap();
+            return abi.encodeWithSelector(
+                SEL_NEAR_SWAP_CURRENT, _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, LIFI_CHAIN_ID_SOLANA, true), swaps_, near_
+            );
+        }
+        return abi.encodeWithSelector(
+            SEL_NEAR_START_CURRENT, _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, LIFI_CHAIN_ID_SOLANA, false), near_
+        );
+    }
+
+    function _lifiIntentsData(
+        bytes32 _recipient,
+        bytes32 _outputToken,
+        bool _withDstCall
+    )
+        internal
+        view
+        returns (LiFiIntentEscrowDataMirror memory)
+    {
+        SwapDataMirror[] memory dstCalls_;
+        if (_withDstCall) {
+            dstCalls_ = new SwapDataMirror[](1);
+            dstCalls_[0] = _sourceSwap();
+        } else {
+            dstCalls_ = new SwapDataMirror[](0);
+        }
+        return LiFiIntentEscrowDataMirror({
+            dstCallReceiver: bytes32(0),
+            recipient: _recipient,
+            depositAndRefundAddress: alice,
+            nonce: 1,
+            expires: uint32(block.timestamp + 1 hours),
+            fillDeadline: uint32(block.timestamp + 2 hours),
+            inputOracle: address(0xCAFE),
+            outputOracle: bytes32(uint256(uint160(address(0xCAFE)))),
+            outputSettler: bytes32(uint256(uint160(address(0xBEEF)))),
+            outputToken: _outputToken,
+            outputAmountMultiplier: 1e18,
+            dstCallSwapData: dstCalls_,
+            outputContext: hex""
+        });
+    }
+
+    function _buildLiFiIntentsCalldata(
+        bytes32 _recipient,
+        bytes32 _outputToken,
+        bool _hasSourceSwaps,
+        bool _withDstCall
+    )
+        internal
+        view
+        returns (bytes memory)
+    {
+        LiFiIntentEscrowDataMirror memory intents_ = _lifiIntentsData(_recipient, _outputToken, _withDstCall);
+        if (_hasSourceSwaps) {
+            SwapDataMirror[] memory swaps_ = new SwapDataMirror[](1);
+            swaps_[0] = _sourceSwap();
+            return abi.encodeWithSelector(
+                SEL_LIFI_INTENTS_SWAP, _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, LIFI_CHAIN_ID_SOLANA, true), swaps_, intents_
+            );
+        }
+        return abi.encodeWithSelector(
+            SEL_LIFI_INTENTS_START, _bridgeData(LiFiSwapQuoteLib.NON_EVM_ADDRESS, LIFI_CHAIN_ID_SOLANA, false), intents_
         );
     }
 

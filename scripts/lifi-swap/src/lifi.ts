@@ -7,6 +7,7 @@ import {
   type LiFiExecutableQuote,
   type LiFiQuoteResponse,
 } from "./lifiApi.js";
+import { tryEncodeSolanaBytes32 } from "./solanaEncoding.js";
 import { addressToBytes32, encodeLiFiNonEvmBytes32 } from "./terms.js";
 import type { SavedDelegation } from "./types.js";
 
@@ -18,6 +19,10 @@ export function isEvmSameChainDest(toChain: number, sourceChain: number): boolea
 
 export function isEvmLiFiChain(chain: LiFiChain): boolean {
   return (chain.chainType ?? "EVM").toUpperCase() === "EVM";
+}
+
+export function isSvmLiFiChain(chain: LiFiChain): boolean {
+  return (chain.chainType ?? "").toUpperCase() === "SVM";
 }
 
 /** Padded EVM bytes32 for output asset + recipient (same-chain and cross-chain EVM). */
@@ -86,6 +91,25 @@ export function resolveTermsEncodings(params: {
       `Cross-chain route to EVM chain ${params.outputChain.name} requires a 0x output recipient; ` +
         `got non-EVM address "${params.outputRecipient}".`,
     );
+  }
+
+  if (params.outputChain && isSvmLiFiChain(params.outputChain)) {
+    if (
+      !params.outputRecipientBytes32Override &&
+      !tryEncodeSolanaBytes32(params.outputRecipient)
+    ) {
+      throw new Error(
+        `Solana destination requires a 32-byte base58 pubkey; got "${params.outputRecipient}".`,
+      );
+    }
+    // Native SOL (system program 11111…) encodes to bytes32(0), the same sentinel as native ETH.
+    // Create stores that value. Full native-token output support is still outstanding: the enforcer
+    // does not pin a native destination asset in calldata, and NEAR reverts when destinationAsset is zero.
+    if (!params.outputAssetIdOverride && !tryEncodeSolanaBytes32(params.toToken)) {
+      throw new Error(
+        `Solana output token must be a 32-byte base58 address (an SPL mint or native SOL). Got "${params.toToken}".`,
+      );
+    }
   }
 
   return {

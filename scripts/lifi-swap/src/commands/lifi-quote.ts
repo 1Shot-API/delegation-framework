@@ -8,12 +8,14 @@ import {
 } from "../config.js";
 import { formatQuoteNotFound, formatQuoteSummary } from "../format.js";
 import { fetchQuote, LiFiApiError } from "../lifiApi.js";
+import { isSvmLiFiChain } from "../lifi.js";
 import {
   loadAllChains,
   loadTokensForChain,
   resolveChain,
   resolveToken,
 } from "../resolve.js";
+import { assertSolanaPubkey } from "../solanaEncoding.js";
 
 function isQuoteNotFoundError(error: LiFiApiError): boolean {
   if (error.path !== "/quote") return false;
@@ -35,10 +37,8 @@ export async function runLifiQuoteCommand(argv: string[]): Promise<void> {
     flagString(flags, "input-address") ??
     process.env.LIFI_QUOTE_INPUT_ADDRESS ??
     defaultFrom;
-  const outputAddress =
-    flagString(flags, "output-address") ??
-    process.env.LIFI_QUOTE_OUTPUT_ADDRESS ??
-    inputAddress;
+  const explicitOutputAddress =
+    flagString(flags, "output-address") ?? process.env.LIFI_QUOTE_OUTPUT_ADDRESS;
   const amountRaw = flagString(flags, "amount") ?? process.env.LIFI_FROM_AMOUNT;
 
   if (
@@ -47,14 +47,14 @@ export async function runLifiQuoteCommand(argv: string[]): Promise<void> {
     !inputTokenQuery ||
     !outputTokenQuery ||
     !inputAddress ||
-    !outputAddress ||
     !amountRaw
   ) {
     throw new Error(
       "Usage: lifi quote --input-chain <name> --input-token <symbol> --output-chain <name> " +
         "--output-token <symbol> --amount <atoms> " +
         "[--input-address <addr>] [--output-address <addr>] " +
-        "(addresses default to PRIVATE_KEY EOA; chains default to LIFI_QUOTE_*_CHAIN in .env) " +
+        "(EVM addresses default to PRIVATE_KEY EOA; Solana requires --output-address; " +
+        "chains default to LIFI_QUOTE_*_CHAIN in .env) " +
         "[--slippage 0.005] [--order FASTEST|CHEAPEST] [--allow-bridges relay,layerswap] " +
         "[--deny-bridges hop] [--calldata] [--raw-errors] [--json] [--verbose]",
     );
@@ -72,6 +72,9 @@ export async function runLifiQuoteCommand(argv: string[]): Promise<void> {
   const chains = await loadAllChains();
   const inputChain = resolveChain(inputChainQuery, chains);
   const outputChain = resolveChain(outputChainQuery, chains);
+  const outputAddress = isSvmLiFiChain(outputChain)
+    ? assertSolanaPubkey(explicitOutputAddress)
+    : (explicitOutputAddress?.trim() || inputAddress);
 
   const inputTokens = await loadTokensForChain(inputChain);
   const outputTokens = await loadTokensForChain(outputChain);

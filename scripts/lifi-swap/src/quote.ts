@@ -90,6 +90,7 @@ export function deriveRouteKind(quote: LiFiQuoteResponse, executionChainId: numb
     if (tool === "layerswap") return RouteKind.LayerSwapBtc;
     if (tool.startsWith("mayan")) return RouteKind.MayanNonEvm;
     if (tool === "allbridge") return RouteKind.AllbridgeNonEvm;
+    if (tool === "lifiintents") return RouteKind.LiFiIntentsNonEvm;
     throw new Error(`Unsupported non-EVM bridge for recipient enforcement: ${tool || "(unknown)"}`);
   }
   return RouteKind.EvmBridge;

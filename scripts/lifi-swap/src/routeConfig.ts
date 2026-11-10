@@ -2,7 +2,9 @@ import { getAddress, isAddress, type Address } from "viem";
 
 import { BASE_CHAIN_ID } from "./constants.js";
 import { flagString } from "./config.js";
+import { isSvmLiFiChain } from "./lifi.js";
 import type { LiFiChain, LiFiToken } from "./lifiApi.js";
+import { assertSolanaPubkey } from "./solanaEncoding.js";
 import {
   loadAllChains,
   loadTokensForChain,
@@ -158,6 +160,9 @@ export function resolveOutputRecipient(
     flagString(flags, "output-address") ??
     flagString(flags, "output-recipient") ??
     outputRecipientEnv;
+  if (isSvmLiFiChain(route.outputChain)) {
+    return assertSolanaPubkey(explicit);
+  }
   if (explicit) return explicit;
   if (route.fromChainId === route.toChainId) return delegator;
   throw new Error(

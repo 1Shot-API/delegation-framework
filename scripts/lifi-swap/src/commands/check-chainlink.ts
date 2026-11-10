@@ -1,4 +1,4 @@
-import { flagString, loadCliConfig, parseArgs } from "../config.js";
+import { flagString, loadCliConfig, parseArgs, rpcUrlForChainId } from "../config.js";
 import { formatChainlinkReport, resolveChainlinkArgs } from "../chainlink.js";
 import { createSmartAccountContext } from "../delegations.js";
 import { savedExecutionChainId } from "../executionChain.js";
@@ -20,7 +20,11 @@ export async function runCheckChainlinkCommand(argv: string[]): Promise<void> {
 
   const cli = loadCliConfig();
   const executionChainId = savedExecutionChainId(saved);
-  const ctx = await createSmartAccountContext(cli.privateKey, cli.rpcUrl, executionChainId);
+  const ctx = await createSmartAccountContext(
+    cli.privateKey,
+    rpcUrlForChainId(executionChainId),
+    executionChainId,
+  );
 
   const overrideRaw = flagString(flags, "reference-round-id");
   const overrideRoundId = overrideRaw !== undefined ? BigInt(overrideRaw) : undefined;

@@ -197,7 +197,7 @@ Set on the caveat **copy** you pass to `redeemDelegations` (do not mutate the us
 ```typescript
 lifiCaveat.args = encodeAbiParameters(
   [
-    { type: "uint8", name: "routeKind" }, // RouteKind enum (0..5), see Step 6a
+    { type: "uint8", name: "routeKind" }, // RouteKind enum (0..6), see Step 6a
     { type: "tuple", components: [/* SignedLiFiQuote fields */] },
     { type: "bytes" },
   ],
@@ -209,25 +209,28 @@ lifiCaveat.args = encodeAbiParameters(
 
 ## Step 6a — RouteKind: selecting the decode branch
 
-`RouteKind` (`src/libraries/LiFiSwapQuoteLib.sol`) is an enum (0..5) that tells the enforcer which calldata layout to decode. It is supplied in args (see Step 6) and is **not** part of the signed quote. Each branch cross-checks the enum against the calldata's 4-byte selector and the `terms` shape, then decodes the recipient and destination-chain fields and asserts they equal `terms.outputRecipient` and `terms.destinationChainId`. Kinds `0..3` are unchanged, so existing redemptions keep the same args encoding.
+`RouteKind` (`src/libraries/LiFiSwapQuoteLib.sol`) is an enum (0..6) that tells the enforcer which calldata layout to decode. It is supplied in args (see Step 6) and is **not** part of the signed quote. Each branch cross-checks the enum against the calldata's 4-byte selector and the `terms` shape, then decodes the recipient and destination-chain fields and asserts they equal `terms.outputRecipient` and `terms.destinationChainId`. Kinds `0..5` are unchanged, so existing redemptions keep the same args encoding.
 
 | Value | Name | Route | LiFi facet / selectors | What the enforcer decodes & enforces |
 | --- | --- | --- | --- | --- |
 | 0 | `SameChain` | Same-chain EVM swap | `GenericSwapFacetV3` (`0x4666fc80` `0x733214a3` `0xaf7060fd` `0x2c57e884` `0x5fd9ae2e` `0x736eac0b`) | Requires `terms.destinationChainId == block.chainid` and a clean-EVM `outputRecipient`. Decodes the `_receiver` (4th param head @ calldata `0x64`) and asserts it equals `terms.outputRecipient`. |
 | 1 | `EvmBridge` | EVM-to-EVM bridge | Selector-agnostic; decodes `ILiFi.BridgeData` | Requires `terms.destinationChainId != block.chainid` and a clean-EVM `outputRecipient`. Decodes `BridgeData.receiver` (offset `+0xA0`) and `BridgeData.destinationChainId` (offset `+0xE0`); rejects the non-EVM sentinel; asserts both equal `terms`. |
-| 2 | `NearBtc` | EVM-to-BTC via NEAR Intents | `NEARIntentsFacet` (`0x5cf8113b` `0x3110c7b9`) | Requires `terms.destinationChainId != block.chainid` and a **non-clean** `outputRecipient`. Decodes `nonEVMReceiver` (1st field of the bridge-specific struct, offset `0x00`) and `BridgeData.destinationChainId`; asserts both equal `terms`. |
+| 2 | `NearBtc` | EVM-to-non-EVM via NEAR Intents (Bitcoin, Solana, and others) | `NEARIntentsFacet` (`0x5cf8113b` `0x3110c7b9` and current `0x4698f032` `0x02631b09`) | Requires `terms.destinationChainId != block.chainid` and a **non-clean** `outputRecipient`. Decodes `nonEVMReceiver` (1st field of the bridge-specific struct, offset `0x00`) and `BridgeData.destinationChainId`; asserts both equal `terms`. Both selector pairs share that word-0 layout. |
 | 3 | `LayerSwapBtc` | EVM-to-BTC via LayerSwap | `LayerSwapFacet` (`0xee9e98e0` `0x4c279d6b`) | Requires `terms.destinationChainId != block.chainid` and a **non-clean** `outputRecipient`. Decodes `nonEVMReceiver` (4th field of the bridge-specific struct, offset `0x60`) and `BridgeData.destinationChainId`; asserts both equal `terms`. |
 | 4 | `MayanNonEvm` | EVM-to-non-EVM via Mayan (Solana and others) | `MayanFacet` (`0xb4875292` `0x80c65808`) | Requires a cross-chain, **non-clean** `outputRecipient`. Decodes `nonEVMReceiver` (1st field, offset `0x00`) and `BridgeData.destinationChainId`. Also requires `MayanData.refundRecipient` (static address at struct `+0xE0`) to equal the delegator. |
 | 5 | `AllbridgeNonEvm` | EVM-to-non-EVM via Allbridge | `AllBridgeFacet` (`0x6a51e9a9` `0x63267469`) | Requires a cross-chain, **non-clean** `outputRecipient`. `AllBridgeData` is a static tuple inlined in the ABI head (calldata `0x24` without source swaps, `0x44` with source swaps). Decodes `recipient` at struct `+0x00` and `BridgeData.destinationChainId`. Also requires `receiveToken` (struct `+0x40`) to equal `terms.outputAssetId`. |
+| 6 | `LiFiIntentsNonEvm` | EVM-to-non-EVM via LiFi Intent Escrow V2 (default Solana USDC route) | `LiFiIntentEscrowFacetV2` (`0x7dbcf1d9` `0x6d21c5df`) | Requires a cross-chain, **non-clean** `outputRecipient`. Decodes `recipient` (2nd field, offset `+0x20`) and `BridgeData.destinationChainId`. Also requires `outputToken` (struct `+0x120`) to equal `terms.outputAssetId`, and `dstCallSwapData.length == 0`. |
 
 **How to pick `RouteKind`:** derive it from the LiFi route you fetched in Step 4.
 
 - If the route is a same-chain swap (destination chain == source chain, EVM recipient) → `SameChain` (0).
 - If the route is an EVM-to-EVM cross-chain bridge → `EvmBridge` (1).
-- If the route bridges to Bitcoin via NEAR Intents → `NearBtc` (2).
+- If the LiFi tool name is `near` → `NearBtc` (2).
 - If the route bridges to Bitcoin via LayerSwap → `LayerSwapBtc` (3).
 - If the LiFi tool name starts with `mayan` → `MayanNonEvm` (4).
 - If the LiFi tool name is `allbridge` → `AllbridgeNonEvm` (5).
+- If the LiFi tool name is `lifiIntents` → `LiFiIntentsNonEvm` (6).
+- `relay` and `relaydepository` quotes can be fetched, but `execute` throws: the Solana recipient is not in that calldata.
 
 **Solana `bytes32` encoding:** a Solana pubkey and an SPL mint are the raw 32-byte base58 decode, left as `bytes32`. Do not `keccak256` the base58 text. LiFi's Solana chain id (`1151111081099710`) goes in `terms.destinationChainId` from the quote; the enforcer does not hardcode it. `afterHook` does not verify delivery on Solana.
 
@@ -320,7 +323,7 @@ Do not rely on source-chain balance checks for cross-chain delivery confirmation
 | `LiFiSwapEnforcer:swap-not-started` | First swap before `terms.startDate` |
 | `LiFiSwapEnforcer:period-amount-exceeded` | `inputAmount` over remaining period budget |
 | `LiFiSwapEnforcer:calldata-too-short` | Calldata too short to read a required 32-byte word (attacker-controlled offset guard) |
-| `LiFiSwapEnforcer:unsupported-route` | `RouteKind` not in 0..5 |
+| `LiFiSwapEnforcer:unsupported-route` | `RouteKind` not in 0..6 |
 | `LiFiSwapEnforcer:route-dest-chain-mismatch` | `RouteKind` implies same-chain but `terms.destinationChainId != block.chainid` (or vice versa) |
 | `LiFiSwapEnforcer:route-recipient-shape-mismatch` | `RouteKind` expects clean-EVM recipient but `terms.outputRecipient` is non-clean (or vice versa) |
 | `LiFiSwapEnforcer:route-selector-mismatch` | Calldata selector not in the set allowed for the given `RouteKind` |
@@ -329,6 +332,8 @@ Do not rely on source-chain balance checks for cross-chain delivery confirmation
 | `LiFiSwapEnforcer:calldata-dest-chain-mismatch` | Decoded calldata `destinationChainId` ≠ `terms.destinationChainId` |
 | `LiFiSwapEnforcer:mayan-refund-recipient-mismatch` | Mayan `refundRecipient` ≠ the delegator |
 | `LiFiSwapEnforcer:allbridge-receive-token-mismatch` | Allbridge `receiveToken` ≠ `terms.outputAssetId` |
+| `LiFiSwapEnforcer:lifi-intents-output-token-mismatch` | LiFi Intents `outputToken` ≠ `terms.outputAssetId` |
+| `LiFiSwapEnforcer:lifi-intents-dst-call` | LiFi Intents `dstCallSwapData` is non-empty |
 | `LiFiSwapEnforcer:source-swaps-mismatch` | `BridgeData.hasSourceSwaps` disagrees with the `start*` / `swapAndStart*` selector |
 | `LiFiSwapEnforcer:insufficient-output-received` | Same-chain `afterHook` balance check failed |
 | `CaveatEnforcer:invalid-call-type` | Batch mode used instead of single |

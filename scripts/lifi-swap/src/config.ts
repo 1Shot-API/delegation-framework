@@ -87,17 +87,25 @@ function parseOptionalAddressEnv(name: string): Address | undefined {
   return getAddress(raw);
 }
 
-function resolveRpcUrl(override?: string): string {
-  return (
-    override ??
-    optionalEnv("ARC_RPC_URL") ??
-    optionalEnv("BASE_RPC_URL") ??
-    (() => {
-      throw new Error(
-        "Missing RPC URL in scripts/lifi-swap/.env (set ARC_RPC_URL or BASE_RPC_URL)",
-      );
-    })()
-  );
+const RPC_ENV_BY_CHAIN_ID: Record<number, string> = {
+  1: "ETHEREUM_RPC_URL",
+  8453: "BASE_RPC_URL",
+  5042: "ARC_RPC_URL",
+};
+
+/** RPC for the chain a delegation is created or redeemed on. */
+export function rpcUrlForChainId(chainId: number): string {
+  const envName = RPC_ENV_BY_CHAIN_ID[chainId];
+  if (!envName) {
+    throw new Error(
+      `No RPC mapping for chain ${chainId}. Known chains use ETHEREUM_RPC_URL (1), BASE_RPC_URL (8453), or ARC_RPC_URL (5042).`,
+    );
+  }
+  const url = optionalEnv(envName);
+  if (!url) {
+    throw new Error(`Missing ${envName} for chain ${chainId} in scripts/lifi-swap/.env`);
+  }
+  return url;
 }
 
 /** EOA for LiFi quote `fromAddress` / `toAddress` when flags are omitted. */
@@ -117,7 +125,7 @@ export function signerAddressFromEnv(): Address | undefined {
 export function loadCliConfig(overrides: Partial<CliConfig> = {}): CliConfig {
   return {
     privateKey: overrides.privateKey ?? parsePrivateKey(),
-    rpcUrl: resolveRpcUrl(overrides.rpcUrl),
+    rpcUrl: overrides.rpcUrl ?? "",
     fromAmount: overrides.fromAmount ?? parseBigIntEnv("LIFI_FROM_AMOUNT", 1_000_000n),
     slippage: overrides.slippage ?? Number(optionalEnv("LIFI_SLIPPAGE") ?? "0.005"),
     periodAmount:

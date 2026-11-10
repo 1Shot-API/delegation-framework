@@ -9,6 +9,7 @@ import {
   loadCliConfig,
   parseArgs,
   parseCommaList,
+  rpcUrlForChainId,
 } from "../config.js";
 import { DELEGATION_MANAGER, MOCK_FEE_USDC_ATOMS } from "../constants.js";
 import {
@@ -287,7 +288,11 @@ export async function runEstimateGasCommand(argv: string[]): Promise<void> {
 
   const saved = loadDelegation(id);
   const executionChainId = savedExecutionChainId(saved);
-  const ctx = await createSmartAccountContext(cli.privateKey, cli.rpcUrl, executionChainId);
+  const ctx = await createSmartAccountContext(
+    cli.privateKey,
+    rpcUrlForChainId(executionChainId),
+    executionChainId,
+  );
 
   if (ctx.account.address.toLowerCase() !== saved.terms.quoteSigner.toLowerCase()) {
     throw new Error("PRIVATE_KEY account must match saved terms.quoteSigner");

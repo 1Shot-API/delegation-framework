@@ -39,15 +39,16 @@ LiFi API discovery (read-only, no PRIVATE_KEY):
   npm run lifi -- connections --from-chain <name> --to-chain <name> [--from-token USDC] [--json]
   npm run lifi -- quote --input-chain <name> --input-token <sym> --output-chain <name> \\
     --output-token <sym> --amount <atoms> [--input-address <addr>] [--output-address <addr>] \\
+    (Solana --output-chain requires a base58 --output-address; EVM defaults to the signer) \\
     [--allow-bridges relay,layerswap] [--deny-bridges hop] [--calldata] [--raw-errors] [--json]
   npm run quote:arc -- --input-token USDC --output-token EURC --amount 1000000
 
 Create options (LiFi-only) — route flags (same style as lifi quote):
-  --input-chain <name>        Source chain (e.g. Base); must match BASE_RPC_URL network
+  --input-chain <name>        Source chain (e.g. Base). RPC is BASE_RPC_URL, ARC_RPC_URL, or ETHEREUM_RPC_URL for that chain id
   --input-token <symbol>      Input token on source chain (e.g. USDC)
   --output-chain <name>       Destination chain (e.g. Ethereum, Bitcoin)
   --output-token <symbol>     Output token on destination chain (e.g. Eth, BTC)
-  --output-address <addr>     Destination recipient (required for cross-chain; defaults to delegator for same-chain)
+  --output-address <addr>     Destination recipient (required for cross-chain and for Solana; defaults to delegator for same-chain EVM)
   --id <slug>                 Saved delegation id
   --name <label>              Human-readable name
   --period-amount <atoms>     Period budget (default: LIFI_PERIOD_AMOUNT)
@@ -83,7 +84,8 @@ Execute options:
                               Over-budget amounts warn locally; enforcer enforces on-chain
 
 Environment (scripts/lifi-swap/.env):
-  PRIVATE_KEY, ARC_RPC_URL or BASE_RPC_URL (must match --input-chain network), RELAYER_URL
+  PRIVATE_KEY, RELAYER_URL
+  RPC by chain id: BASE_RPC_URL (8453), ARC_RPC_URL (5042), ETHEREUM_RPC_URL (1)
   Optional quote defaults: LIFI_QUOTE_INPUT_CHAIN, LIFI_QUOTE_OUTPUT_CHAIN, LIFI_FROM_AMOUNT
   Optional defaults: LIFI_PERIOD_*, LIFI_SLIPPAGE*, LIFI_FROM_AMOUNT (execute)
   Legacy create-only: LIFI_FROM_TOKEN, LIFI_TO_TOKEN, LIFI_TO_CHAIN

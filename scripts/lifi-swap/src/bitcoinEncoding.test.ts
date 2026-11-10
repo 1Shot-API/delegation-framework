@@ -111,6 +111,32 @@ describe("resolveTermsEncodings Solana route", () => {
     assert.equal(result.outputRecipient, SOLANA_RECIPIENT_BYTES32);
     assert.equal(result.outputAssetId, SOLANA_USDC_BYTES32);
   });
+
+  it("rejects a Solana recipient that is not a 32-byte pubkey", () => {
+    assert.throws(
+      () =>
+        resolveTermsEncodings({
+          toChain: solanaChain.id,
+          sourceChain: 8453,
+          toToken: SOLANA_USDC_MINT,
+          outputRecipient: "not-a-solana-pubkey",
+          outputChain: solanaChain,
+        }),
+      /32-byte base58/,
+    );
+  });
+
+  it("encodes native SOL as bytes32(0)", () => {
+    const result = resolveTermsEncodings({
+      toChain: solanaChain.id,
+      sourceChain: 8453,
+      toToken: SOLANA_SYSTEM_PROGRAM,
+      outputRecipient: SOLANA_RECIPIENT,
+      outputChain: solanaChain,
+    });
+    assert.equal(result.outputAssetId, `0x${"00".repeat(32)}`);
+    assert.equal(result.outputRecipient, SOLANA_RECIPIENT_BYTES32);
+  });
 });
 
 describe("deriveRouteKind", () => {
@@ -134,14 +160,20 @@ describe("deriveRouteKind", () => {
     };
   }
 
-  it("maps Mayan and Allbridge tools onto the new route kinds", () => {
+  it("maps Mayan, Allbridge, and LiFi Intents tools onto route kinds", () => {
     assert.equal(deriveRouteKind(nonEvmQuote("mayan"), 8453), RouteKind.MayanNonEvm);
     assert.equal(deriveRouteKind(nonEvmQuote("mayanWH"), 8453), RouteKind.MayanNonEvm);
     assert.equal(deriveRouteKind(nonEvmQuote("allbridge"), 8453), RouteKind.AllbridgeNonEvm);
+    assert.equal(deriveRouteKind(nonEvmQuote("lifiIntents"), 8453), RouteKind.LiFiIntentsNonEvm);
+    assert.equal(RouteKind.LiFiIntentsNonEvm, 6);
   });
 
   it("still rejects unsupported non-EVM tools", () => {
     assert.throws(() => deriveRouteKind(nonEvmQuote("relay"), 8453), /Unsupported non-EVM bridge/);
+    assert.throws(
+      () => deriveRouteKind(nonEvmQuote("relaydepository"), 8453),
+      /Unsupported non-EVM bridge/,
+    );
   });
 });
 

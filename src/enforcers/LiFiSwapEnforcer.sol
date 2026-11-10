@@ -40,9 +40,13 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
     bytes4 private constant SEL_GENERIC_MULTI_ERC20_ERC20 = 0x5fd9ae2e;
     bytes4 private constant SEL_GENERIC_MULTI_NATIVE_ERC20 = 0x736eac0b;
 
-    // NEARIntentsFacet selectors (EVM -> BTC).
+    // NEARIntentsFacet selectors. Word 0 is `nonEVMReceiver` on both ABIs.
+    // The first pair is the pre-destinationAsset struct. The second pair is the current
+    // struct, where `destinationAsset` is the second word.
     bytes4 private constant SEL_NEAR_START = 0x5cf8113b;
     bytes4 private constant SEL_NEAR_SWAP = 0x3110c7b9;
+    bytes4 private constant SEL_NEAR_START_CURRENT = 0x4698f032;
+    bytes4 private constant SEL_NEAR_SWAP_CURRENT = 0x02631b09;
 
     // LayerSwapFacet selectors (EVM -> BTC).
     bytes4 private constant SEL_LAYERSWAP_START = 0xee9e98e0;
@@ -62,6 +66,13 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
     bytes4 private constant SEL_ALLBRIDGE_START = 0x6a51e9a9;
     // swapAndStartBridgeTokensViaAllBridge(BridgeData,SwapData[],AllBridgeData)
     bytes4 private constant SEL_ALLBRIDGE_SWAP = 0x63267469;
+
+    // LiFiIntentEscrowFacetV2 selectors. `recipient` is the second head word (+0x20).
+    // `outputToken` is the static bytes32 at +0x120. `dstCallSwapData` is the offset at +0x160.
+    // startBridgeTokensViaLiFiIntentEscrowV2(BridgeData,LiFiIntentEscrowDataV2)
+    bytes4 private constant SEL_LIFI_INTENTS_START = 0x7dbcf1d9;
+    // swapAndStartBridgeTokensViaLiFiIntentEscrowV2(BridgeData,SwapData[],LiFiIntentEscrowDataV2)
+    bytes4 private constant SEL_LIFI_INTENTS_SWAP = 0x6d21c5df;
 
     struct PeriodicAllowance {
         uint256 periodAmount;
@@ -403,6 +414,7 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
         } else if (
             _routeKind == LiFiSwapQuoteLib.RouteKind.NearBtc || _routeKind == LiFiSwapQuoteLib.RouteKind.LayerSwapBtc
                 || _routeKind == LiFiSwapQuoteLib.RouteKind.MayanNonEvm || _routeKind == LiFiSwapQuoteLib.RouteKind.AllbridgeNonEvm
+                || _routeKind == LiFiSwapQuoteLib.RouteKind.LiFiIntentsNonEvm
         ) {
             _verifyNonEvmReceiver(_terms, selector_, _callData, _routeKind, _delegator);
         } else {
@@ -438,9 +450,10 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
     }
 
     /// @dev Cross-chain route whose bridge-specific struct carries a `bytes32` recipient.
-    ///      Offset is 0x00 for NEAR, Mayan, and Allbridge, and 0x60 for LayerSwap.
+    ///      Offset is 0x00 for NEAR, Mayan, and Allbridge, 0x20 for LiFi Intents, and 0x60 for LayerSwap.
     ///      Mayan also pins `refundRecipient` (struct +0xE0) to the delegator. Allbridge also pins
-    ///      `receiveToken` (struct +0x40) to `terms.outputAssetId`.
+    ///      `receiveToken` (struct +0x40) to `terms.outputAssetId`. LiFi Intents pins `outputToken`
+    ///      (struct +0x120) to `terms.outputAssetId` and rejects a non-empty `dstCallSwapData`.
     function _verifyNonEvmReceiver(
         LiFiSwapQuoteLib.Terms memory _terms,
         bytes4 _selector,
@@ -456,7 +469,11 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
 
         uint256 nonEvmFieldOff_;
         if (_routeKind == LiFiSwapQuoteLib.RouteKind.NearBtc) {
-            require(_selector == SEL_NEAR_START || _selector == SEL_NEAR_SWAP, "LiFiSwapEnforcer:route-selector-mismatch");
+            require(
+                _selector == SEL_NEAR_START || _selector == SEL_NEAR_SWAP || _selector == SEL_NEAR_START_CURRENT
+                    || _selector == SEL_NEAR_SWAP_CURRENT,
+                "LiFiSwapEnforcer:route-selector-mismatch"
+            );
             nonEvmFieldOff_ = 0x00;
         } else if (_routeKind == LiFiSwapQuoteLib.RouteKind.LayerSwapBtc) {
             require(_selector == SEL_LAYERSWAP_START || _selector == SEL_LAYERSWAP_SWAP, "LiFiSwapEnforcer:route-selector-mismatch");
@@ -467,6 +484,12 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
         } else if (_routeKind == LiFiSwapQuoteLib.RouteKind.AllbridgeNonEvm) {
             require(_selector == SEL_ALLBRIDGE_START || _selector == SEL_ALLBRIDGE_SWAP, "LiFiSwapEnforcer:route-selector-mismatch");
             nonEvmFieldOff_ = 0x00;
+        } else if (_routeKind == LiFiSwapQuoteLib.RouteKind.LiFiIntentsNonEvm) {
+            require(
+                _selector == SEL_LIFI_INTENTS_START || _selector == SEL_LIFI_INTENTS_SWAP,
+                "LiFiSwapEnforcer:route-selector-mismatch"
+            );
+            nonEvmFieldOff_ = 0x20;
         } else {
             revert("LiFiSwapEnforcer:unsupported-route");
         }
@@ -490,6 +513,13 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
         } else if (_routeKind == LiFiSwapQuoteLib.RouteKind.AllbridgeNonEvm) {
             bytes32 receiveToken_ = _readWord(_callData, structBody_ + 0x40);
             require(receiveToken_ == _terms.outputAssetId, "LiFiSwapEnforcer:allbridge-receive-token-mismatch");
+        } else if (_routeKind == LiFiSwapQuoteLib.RouteKind.LiFiIntentsNonEvm) {
+            bytes32 outputToken_ = _readWord(_callData, structBody_ + 0x120);
+            require(outputToken_ == _terms.outputAssetId, "LiFiSwapEnforcer:lifi-intents-output-token-mismatch");
+            // Offset is relative to the start of the dynamic struct encoding.
+            uint256 dstCallOff_ = uint256(_readWord(_callData, structBody_ + 0x160));
+            uint256 dstCallLen_ = uint256(_readWord(_callData, structBody_ + dstCallOff_));
+            require(dstCallLen_ == 0, "LiFiSwapEnforcer:lifi-intents-dst-call");
         }
     }
 
@@ -508,8 +538,8 @@ contract LiFiSwapEnforcer is CaveatEnforcer {
     function _nonEvmHeadSlot(bytes4 _selector, bytes calldata _callData) private pure returns (uint256 bd_, uint256 headSlot_) {
         bd_ = _bridgeDataBody(_callData);
         bool hasSourceSwaps_ = uint256(_readWord(_callData, bd_ + 0x100)) != 0;
-        bool isSwapSelector_ = _selector == SEL_NEAR_SWAP || _selector == SEL_LAYERSWAP_SWAP || _selector == SEL_MAYAN_SWAP
-            || _selector == SEL_ALLBRIDGE_SWAP;
+        bool isSwapSelector_ = _selector == SEL_NEAR_SWAP || _selector == SEL_NEAR_SWAP_CURRENT || _selector == SEL_LAYERSWAP_SWAP
+            || _selector == SEL_MAYAN_SWAP || _selector == SEL_ALLBRIDGE_SWAP || _selector == SEL_LIFI_INTENTS_SWAP;
         require(hasSourceSwaps_ == isSwapSelector_, "LiFiSwapEnforcer:source-swaps-mismatch");
         headSlot_ = isSwapSelector_ ? 0x44 : 0x24;
     }

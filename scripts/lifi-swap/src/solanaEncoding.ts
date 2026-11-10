@@ -45,3 +45,16 @@ export function tryEncodeSolanaBytes32(value: string): Hex | undefined {
   if (!decoded || decoded.length !== 32) return undefined;
   return padHex(toHex(decoded), { size: 32 });
 }
+
+/** A Solana pubkey or SPL mint: base58 that decodes to exactly 32 bytes. */
+export function assertSolanaPubkey(value: string | undefined): string {
+  const trimmed = value?.trim() ?? "";
+  if (!tryEncodeSolanaBytes32(trimmed)) {
+    throw new Error(
+      trimmed
+        ? `Solana destination requires a 32-byte base58 pubkey; got "${trimmed}".`
+        : "Solana destination requires --output-address (a 32-byte base58 pubkey).",
+    );
+  }
+  return trimmed;
+}

@@ -3,6 +3,7 @@ import {
   flagBool,
   flagString,
   loadCliConfig,
+  rpcUrlForChainId,
   parseArgs,
   parseCommaList,
 } from "../config.js";
@@ -56,7 +57,11 @@ export async function runExecuteCommand(argv: string[]): Promise<void> {
 
   const saved = loadDelegation(id);
   const executionChainId = savedExecutionChainId(saved);
-  const ctx = await createSmartAccountContext(cli.privateKey, cli.rpcUrl, executionChainId);
+  const ctx = await createSmartAccountContext(
+    cli.privateKey,
+    rpcUrlForChainId(executionChainId),
+    executionChainId,
+  );
 
   if (ctx.account.address.toLowerCase() !== saved.terms.quoteSigner.toLowerCase()) {
     throw new Error("PRIVATE_KEY account must match saved terms.quoteSigner");

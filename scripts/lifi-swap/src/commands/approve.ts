@@ -1,6 +1,6 @@
 import { maxUint256 } from "viem";
 
-import { flagBool, loadCliConfig, parseArgs } from "../config.js";
+import { flagBool, loadCliConfig, parseArgs, rpcUrlForChainId } from "../config.js";
 import { savedExecutionChainId } from "../executionChain.js";
 import {
   createFeeDelegation,
@@ -35,7 +35,11 @@ export async function runApproveCommand(argv: string[]): Promise<void> {
   const cli = loadCliConfig();
   const saved = loadDelegation(id);
   const executionChainId = savedExecutionChainId(saved);
-  const ctx = await createSmartAccountContext(cli.privateKey, cli.rpcUrl, executionChainId);
+  const ctx = await createSmartAccountContext(
+    cli.privateKey,
+    rpcUrlForChainId(executionChainId),
+    executionChainId,
+  );
 
   const allowance = await readErc20Allowance(ctx, saved.terms.inputToken, saved.terms.lifiDiamond);
   if (allowance >= maxUint256 / 2n) {

@@ -270,11 +270,6 @@ async function main(): Promise<void> {
   console.log("getCode.present:", hasContractCode);
   console.log("getCode.byteLength:", hasContractCode ? (codeHex.length - 2) / 2 : 0);
   console.log("needsEip7702Upgrade:", needsUpgrade);
-  if (!hasContractCode) {
-    console.log(
-      "note: unsigned estimate requires on-chain 7702/smart-account code; case 2 is expected to fail until the account is upgraded.",
-    );
-  }
   if (usdcBalance < maxAmount) {
     console.log(
       `note: USDC balance ${usdcBalance} < fee+work ${maxAmount}; simulation may revert (shim does not fake balances).`,

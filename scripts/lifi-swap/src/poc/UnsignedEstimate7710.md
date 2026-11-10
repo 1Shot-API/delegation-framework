@@ -29,7 +29,7 @@ Do **not** use placeholders on **`relayer_send7710Transaction`**. Send requires 
 | JSON-RPC method | `relayer_estimate7710Transaction` | Same |
 | `params.transactions` | Same structure (permission context + executions) | Same |
 | Delegation `signature` fields | Real 65-byte ECDSA (or kit equivalent) | Placeholder (see below) |
-| `params.authorizationList` | When delegator has no 7702 code yet | Same rules as signed |
+| `params.authorizationList` | When delegator has no 7702 code yet | Signed on estimate, **or** placeholder `r`/`s` (32-byte zero) + `yParity` `0` with real `address`/`chainId`/`nonce` when using delegation placeholders (relayer adds ~40100 gas; see 1shot-okx-relayer docs) |
 | `params.delegationSecret` | Omit on estimate | Omit on estimate |
 | `params.context` | Optional on estimate | Optional on estimate |
 | Persisted task / send | No | No |
@@ -62,7 +62,7 @@ Same value as [`pocConstants.ts`](../pocConstants.ts) (`BOGUS_DELEGATION_SIGNATU
 
 1. **Per delegation chain:** Either **all** delegations in `permissionContext` use placeholders, or **all** use real signatures. Mixed chains are rejected.
 2. **Per request:** All `transactions[]` entries must use the same mode (all placeholder or all signed). You cannot mix unsigned and signed estimates in one estimate call.
-3. **Delegator must be a contract account** (EIP-7702 / smart account with code at the delegator address). Pure EOAs without code cannot use the shim path; sign delegations for those estimates or upgrade the account first.
+3. **Delegator address:** Any valid delegator address, including **un-upgraded EOAs**; the relayer injects shim **code** via `stateOverride` at estimate time (no on-chain upgrade required for unsigned quotes).
 4. **Chain support:** The relayer must have **`delegatorEstimateShimRuntimeHex`** configured for that chain (patched `DelegatorEstimateShim` runtime for the chain’s `DelegationManager`). Unsupported chains return a configuration error for unsigned estimates.
 5. **On-chain balances:** The relayer does **not** fake ERC-20 balances or allowances in state overrides (estimate uses real balances). Simulation reverts if the delegator cannot fund the executions (same as production).
 
@@ -75,7 +75,7 @@ For requests where every client delegation signature is a placeholder:
 1. Validates params (same as signed estimate, with placeholder rules above).
 2. Redelegates to the pool / target wallet (same as send path).
 3. Builds a **Geth-style `stateOverride`** for the 1Shot M2M contract-method estimate:
-   - For each **contract** delegator that used a placeholder signature in the client payload, set `stateOverride[delegator].code` to the chain’s **DelegatorEstimateShim** runtime bytecode.
+   - For each delegator that used a placeholder signature in the client payload, set `stateOverride[delegator].code` to the chain’s **DelegatorEstimateShim** runtime bytecode.
 4. Calls 1Shot estimate (`redeemDelegations`) with that override so `DelegationManager` runs **real enforcer hooks** and **real execution calldata**, while ERC-1271 checks hit the shim instead of the live DeleGator.
 
 The shim ([`DelegatorEstimateShim.sol`](../../../../src/poc/DelegatorEstimateShim.sol)) mirrors gas on the paths the manager uses: proxy-style `isValidSignature` (including `ecrecover` work for 65-byte placeholders) and single-default `executeFromExecutor` aligned with `ExecutionHelper`.
@@ -143,7 +143,7 @@ Residual gap is expected (invalid vs valid `ecrecover`, real DeleGator vs shim a
 - [ ] Use placeholders only on **`relayer_estimate7710Transaction`** / **`relayer_estimate7710TransactionMultichain`**, not send.
 - [ ] Use **65-byte zero** placeholders on supported relayers.
 - [ ] Keep delegation fields (caveats, delegate, salt, etc.) identical between quote and send; only swap signatures at submit time.
-- [ ] Ensure delegator has **7702 code** and sufficient **token balance** for the simulated transfers.
+- [ ] Ensure sufficient **token balance** (and allowance if needed) for the simulated transfers; on-chain 7702 upgrade is **not** required for unsigned estimate.
 - [ ] Handle estimate failures (reverts) as “cannot quote this calldata,” not as auth bypass on send.
 - [ ] Pass **`params.context`** from estimate to send when locking fee quotes (unchanged from signed flow).
 
