@@ -9,10 +9,11 @@ import { CALLTYPE_SINGLE, CALLTYPE_BATCH, EXECTYPE_DEFAULT, EXECTYPE_TRY } from 
 import { ERC1271Lib } from "../libraries/ERC1271Lib.sol";
 
 /// @notice PoC-only delegator bytecode for eth_estimateGas with state overrides.
-/// @dev Mirrors the gas profile of EIP7702StatelessDeleGator on the two paths
+/// @dev Mirrors the gas profile of EIP7702StatelessDeleGator on the paths
 ///      DelegationManager exercises (isValidSignature + single-default
-///      executeFromExecutor) without requiring a valid signature. Not for
-///      production. Single-default executions only.
+///      executeFromExecutor) without requiring a valid signature, and accepts
+///      native ETH the way the real DeleGator does so swap payouts succeed.
+///      Not for production. Single-default executions only.
 contract DelegatorEstimateShim {
     using ModeLib for ModeCode;
     using ExecutionLib for bytes;
@@ -36,6 +37,10 @@ contract DelegatorEstimateShim {
         delegationManager = _delegationManager;
     }
 
+    /// @dev Matches EIP7702DeleGatorCore.receive. Empty calldata value transfers
+    ///      (LI.FI native payouts) hit this instead of the function dispatcher.
+    receive() external payable { }
+
     /// @dev Mirrors EIP7702DeleGatorCore.isValidSignature: onlyProxy guard,
     ///      then ECDSA.tryRecover (pays the ecrecover precompile + OZ overhead),
     ///      then returns magic regardless of the recovered address so any
@@ -52,7 +57,10 @@ contract DelegatorEstimateShim {
     /// @dev Mirrors EIP7702DeleGatorCore.executeFromExecutor: onlyDelegationManager,
     ///      mode decode + branch, single-default via the same assembly call
     ///      body as ExecutionHelper._execute (bubble revert on failure).
-    function executeFromExecutor(ModeCode _mode, bytes calldata _executionCalldata)
+    function executeFromExecutor(
+        ModeCode _mode,
+        bytes calldata _executionCalldata
+    )
         external
         payable
         returns (bytes[] memory returnData_)
@@ -76,10 +84,7 @@ contract DelegatorEstimateShim {
     }
 
     /// @dev Same memory-safe-assembly call body as ExecutionHelper._execute.
-    function _execute(address target, uint256 value, bytes calldata callData)
-        internal
-        returns (bytes memory result)
-    {
+    function _execute(address target, uint256 value, bytes calldata callData) internal returns (bytes memory result) {
         /// @solidity memory-safe-assembly
         assembly {
             result := mload(0x40)

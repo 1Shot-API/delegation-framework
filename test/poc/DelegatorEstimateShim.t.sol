@@ -17,8 +17,7 @@ contract RevertingTarget {
 
 contract DelegatorEstimateShimTest is Test {
     DelegationManager internal delegationManager;
-    bytes32 internal constant ROOT_AUTHORITY =
-        0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+    bytes32 internal constant ROOT_AUTHORITY = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
     DelegatorEstimateShim internal shimImpl;
     address internal delegator;
     address internal redeemer;
@@ -83,14 +82,19 @@ contract DelegatorEstimateShimTest is Test {
         vm.prank(redeemer);
         {
             (CallType callType_,,,) = ModeLib.decode(batchDefaultMode);
-            vm.expectRevert(
-                abi.encodeWithSelector(
-                    DelegatorEstimateShim.UnsupportedCallType.selector,
-                    callType_
-                )
-            );
+            vm.expectRevert(abi.encodeWithSelector(DelegatorEstimateShim.UnsupportedCallType.selector, callType_));
         }
         delegationManager.redeemDelegations(contexts_, modes_, executions_);
+    }
+
+    function test_acceptsNativeEthWithEmptyCalldata() public {
+        uint256 amount_ = 1 ether;
+        vm.deal(address(this), amount_);
+
+        (bool ok_,) = delegator.call{ value: amount_ }("");
+
+        assertTrue(ok_);
+        assertEq(delegator.balance, amount_);
     }
 
     function test_bubblesTargetRevert() public {
@@ -103,11 +107,7 @@ contract DelegatorEstimateShimTest is Test {
         modes_[0] = singleDefaultMode;
 
         bytes[] memory executions_ = new bytes[](1);
-        executions_[0] = ExecutionLib.encodeSingle(
-            address(revertingTarget),
-            0,
-            abi.encodeWithSignature("anything()")
-        );
+        executions_[0] = ExecutionLib.encodeSingle(address(revertingTarget), 0, abi.encodeWithSignature("anything()"));
 
         vm.prank(redeemer);
         vm.expectRevert(bytes("target-revert"));
@@ -125,11 +125,7 @@ contract DelegatorEstimateShimTest is Test {
         });
     }
 
-    function _toDelegationArray(Delegation memory d)
-        internal
-        pure
-        returns (Delegation[] memory arr)
-    {
+    function _toDelegationArray(Delegation memory d) internal pure returns (Delegation[] memory arr) {
         arr = new Delegation[](1);
         arr[0] = d;
     }

@@ -71,7 +71,9 @@ sequenceDiagram
 
 2. **`executeFromExecutor`** — only callable by `delegationManager` immutable. Decodes **single-default** execution via `ExecutionLib.decodeSingle`, then `target.call{value}(callData)`. On failure, **bubbles** inner revert data (assembly); empty revert → `ExecutionFailed()`.
 
-3. **Not production-safe** — does not implement full `EIP7702DeleGatorCore` (batch modes, try/catch exec types, entrypoint paths, etc.).
+3. **`receive()`** — empty payable, matching `EIP7702DeleGatorCore`. Accepts native ETH sent with empty calldata (LI.FI native payouts). Without it the dispatcher reverts and the diamond surfaces `NativeAssetTransferFailed()`.
+
+4. **Not production-safe** — does not implement full `EIP7702DeleGatorCore` (batch modes, try/catch exec types, entrypoint paths, etc.).
 
 **Forge test:** [`test/poc/DelegatorEstimateShim.t.sol`](test/poc/DelegatorEstimateShim.t.sol) — `vm.etch(delegator, shim.code)` + bogus sig → `redeemDelegations` succeeds.
 
